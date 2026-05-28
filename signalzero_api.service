@@ -1,16 +1,16 @@
 [Unit]
-Description=SignalZero weekly digest dispatch
+Description=SignalZero FastAPI daemon
 After=network.target
 
 [Service]
-Type=oneshot
+Type=simple
 WorkingDirectory=/home/vishnu/worklab/SignalZero
-ExecStart=/home/vishnu/worklab/SignalZero/.venv/bin/python weekly_digest.py
+ExecStart=/home/vishnu/worklab/SignalZero/.venv/bin/python -m src.api.main
+Restart=always
+RestartSec=5
 StandardOutput=append:/home/vishnu/worklab/SignalZero/signalzero.log
 StandardError=append:/home/vishnu/worklab/SignalZero/signalzero.log
 EnvironmentFile=/home/vishnu/worklab/SignalZero/.env
-User=vishnu
-Group=vishnu
 
 [Install]
 WantedBy=default.target

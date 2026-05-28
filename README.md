@@ -140,24 +140,26 @@ uv run python weekly_digest.py
 SignalZero can be configured to run continuously in headless environments using `systemd` timers.
 
 1. **Deploy Service Units:**
-   Copy the unit files to `/etc/systemd/system/`:
+   Copy the unit files to the user's systemd directory `~/.config/systemd/user/`:
    ```bash
-   sudo cp signalzero.service /etc/systemd/system/
-   sudo cp signalzero.timer /etc/systemd/system/
-   sudo cp signalzero_digest.service /etc/systemd/system/
-   sudo cp signalzero_digest.timer /etc/systemd/system/
+   mkdir -p ~/.config/systemd/user/
+   cp signalzero.service ~/.config/systemd/user/
+   cp signalzero.timer ~/.config/systemd/user/
+   cp signalzero_api.service ~/.config/systemd/user/
+   cp signalzero_digest.service ~/.config/systemd/user/
+   cp signalzero_digest.timer ~/.config/systemd/user/
    ```
 
-2. **Reload and Enable Timers:**
+2. **Reload and Enable Services:**
    ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now signalzero.timer
-   sudo systemctl enable --now signalzero_digest.timer
+   systemctl --user daemon-reload
+   systemctl --user enable --now signalzero_api.service signalzero.timer signalzero_digest.timer
    ```
 
-3. **Check Pipeline Logs:**
+3. **Check Logs:**
    ```bash
-   journalctl -u signalzero.service -n 50 --no-pager
+   journalctl --user -u signalzero_api.service -n 50 --no-pager
+   journalctl --user -u signalzero.service -n 50 --no-pager
    ```
 
 ---

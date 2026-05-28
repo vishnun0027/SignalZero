@@ -1,116 +1,105 @@
-name: SignalZero CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
-
-env:
-  APP_DIR: /home/opc/SignalZero
-  VENV_BIN: /home/opc/SignalZero/.venv/bin
+    branches:
+      - main
 
 jobs:
-  lint:
+  ci:
+    name: Continuous Integration (Tests & Lint)
     runs-on: ubuntu-latest
+
+    env:
+      # Dummy values so modules can import without crashing.
+      # All real I/O is mocked inside the test suite.
+      DATABASE_URL: "sqlite:///./test.db"
+      GROQ_API_KEY: "ci-dummy-key"
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install dev tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff mypy
-      - name: Run ruff
-        run: ruff check .
-      - name: Run mypy
-        run: mypy src --ignore-missing-imports
 
-  test:
-    needs: lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install pytest
-      - name: Run pytest
-        env:
-          DATABASE_URL: sqlite:///test_signalzero.db
-        run: pytest -q
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Build package
-        run: |
-          python -m pip install --upgrade build
-          python -m build --wheel
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
-        with:
-          name: signalzero-wheel
-          path: dist/*.whl
+      - name: Add uv to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-  deploy:
-    needs: build
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install Dependencies
+        run: uv sync
+
+      - name: Lint with Ruff
+        run: uv run ruff check .
+
+      - name: Run Tests
+        run: uv run pytest tests/ -v --tb=short
+
+  cd:
+    name: Continuous Deployment (Ubuntu Cloud Instance)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
     steps:
-      - name: Download wheel
-        uses: actions/download-artifact@v4
+      - name: Deploy to Ubuntu VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: signalzero-wheel
-          path: ./dist
-      - name: Add SSH key
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.OCI_HOST }} >> ~/.ssh/known_hosts
-      - name: Deploy to OCI
-        env:
-          OCI_HOST: ${{ secrets.OCI_HOST }}
-          OCI_USER: ${{ secrets.OCI_USER }}
-        run: |
-          ssh $OCI_USER@$OCI_HOST bash -s <<'EOSSH'
-            set -euo pipefail
-            cd ${{ env.APP_DIR }}
-            git fetch --all
-            git reset --hard origin/main
-            if [ ! -d ".venv" ]; then
-              python3.12 -m venv .venv
-            fi
-            source .venv/bin/activate
-            pip install --upgrade pip setuptools wheel
-            pip install --upgrade dist/*.whl
-            sudo systemctl daemon-reload
-            sudo systemctl restart signalzero.service
-            .venv/bin/python verify_connections.py | head -n 20
-          EOSSH
-      - name: Collect remote log
-        env:
-          OCI_HOST: ${{ secrets.OCI_HOST }}
-          OCI_USER: ${{ secrets.OCI_USER }}
-        run: |
-          ssh $OCI_USER@$OCI_HOST "journalctl -u signalzero.service -n 50" > remote_log.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: remote-deploy-log
-          path: remote_log.txt
+          host: ${{ secrets.SSH_HOST }}
+          username: vishnu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /home/vishnu/worklab/SignalZero
+            export PATH="$HOME/.local/bin:$PATH"
+
+            echo "--- Pulling latest code ---"
+            git reset --hard HEAD
+            git pull origin main
+
+            echo "--- Syncing dependencies ---"
+            uv sync --frozen
+
+            echo "--- Installing systemd service files ---"
+            mkdir -p ~/.config/systemd/user/
+            cp /home/vishnu/worklab/SignalZero/signalzero*.service ~/.config/systemd/user/
+            cp /home/vishnu/worklab/SignalZero/signalzero*.timer ~/.config/systemd/user/
+
+            echo "--- Reloading systemd and restarting services ---"
+            systemctl --user daemon-reload
+            systemctl --user enable signalzero_api.service signalzero.timer signalzero_digest.timer
+            systemctl --user restart signalzero_api.service signalzero.timer signalzero_digest.timer
+
+            echo "--- Verifying deployment (health check) ---"
+            sleep 5
+            curl --fail --silent --show-error http://localhost:8007/api/health \
+              && echo "✅ API health check passed" \
+              || (echo "❌ API health check FAILED" && exit 1)
+
+            echo "--- Checking service statuses ---"
+            systemctl --user is-active --quiet signalzero_api.service \
+              && echo "✅ signalzero_api.service is active" \
+              || echo "⚠️  signalzero_api.service is NOT active"
+            systemctl --user is-active --quiet signalzero.timer \
+              && echo "✅ signalzero.timer is active" \
+              || echo "⚠️  signalzero.timer is NOT active"
+            systemctl --user is-active --quiet signalzero_digest.timer \
+              && echo "✅ signalzero_digest.timer is active" \
+              || echo "⚠️  signalzero_digest.timer is NOT active"

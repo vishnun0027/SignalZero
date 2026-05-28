@@ -13,4 +13,4 @@ User=vishnu
 Group=vishnu
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
