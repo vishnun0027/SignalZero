@@ -60,11 +60,14 @@ jobs:
     steps:
       - name: Deploy to Ubuntu VM via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DOTENV_CONTENT: ${{ secrets.DOTENV_FILE }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          envs: DOTENV_CONTENT
           script: |
             set -e
             
@@ -95,10 +98,6 @@ jobs:
                 mkdir -p "$HOME/worklab"
                 git clone https://github.com/vishnun0027/SignalZero.git "$HOME/worklab/SignalZero"
                 APP_DIR="$HOME/worklab/SignalZero"
-                # Copy example env to .env if not exists
-                if [ ! -f "$APP_DIR/.env" ]; then
-                  cp "$APP_DIR/.env.example" "$APP_DIR/.env"
-                fi
               fi
             fi
 
@@ -109,6 +108,9 @@ jobs:
             echo "--- Pulling latest code ---"
             git reset --hard HEAD
             git pull origin main
+
+            echo "--- Writing .env from GitHub Secrets ---"
+            printf '%s\n' "$DOTENV_CONTENT" > "$APP_DIR/.env"
 
             echo "--- Syncing dependencies ---"
             uv sync --frozen
