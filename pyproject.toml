@@ -1,0 +1,27 @@
+[project]
+name = "signalzero"
+version = "0.1.0"
+description = "Weak Signal Intelligence for Emerging AI/ML Technologies"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "arxiv>=2.1.0",
+    "fastapi>=0.110.0",
+    "groq>=0.5.0",
+    "langchain-community>=0.0.30",
+    "langchain-core>=0.1.30",
+    "langgraph>=0.0.30",
+    "neo4j>=5.18.0",
+    "numpy>=1.26.0",
+    "openai>=1.14.0",
+    "psycopg2-binary>=2.9.9",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "pytest>=8.0.0",
+    "redis>=5.0.0",
+    "requests>=2.31.0",
+    "river>=0.21.0",
+    "sentence-transformers>=5.5.1",
+    "sqlalchemy>=2.0.0",
+    "uvicorn>=0.28.0",
+]

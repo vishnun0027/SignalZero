@@ -1,0 +1,116 @@
+name: SignalZero CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  APP_DIR: /home/opc/SignalZero
+  VENV_BIN: /home/opc/SignalZero/.venv/bin
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+      - name: Run ruff
+        run: ruff check .
+      - name: Run mypy
+        run: mypy src --ignore-missing-imports
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest
+      - name: Run pytest
+        env:
+          DATABASE_URL: sqlite:///test_signalzero.db
+        run: pytest -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build package
+        run: |
+          python -m pip install --upgrade build
+          python -m build --wheel
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: signalzero-wheel
+          path: dist/*.whl
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: signalzero-wheel
+          path: ./dist
+      - name: Add SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.OCI_HOST }} >> ~/.ssh/known_hosts
+      - name: Deploy to OCI
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+        run: |
+          ssh $OCI_USER@$OCI_HOST bash -s <<'EOSSH'
+            set -euo pipefail
+            cd ${{ env.APP_DIR }}
+            git fetch --all
+            git reset --hard origin/main
+            if [ ! -d ".venv" ]; then
+              python3.12 -m venv .venv
+            fi
+            source .venv/bin/activate
+            pip install --upgrade pip setuptools wheel
+            pip install --upgrade dist/*.whl
+            sudo systemctl daemon-reload
+            sudo systemctl restart signalzero.service
+            .venv/bin/python verify_connections.py | head -n 20
+          EOSSH
+      - name: Collect remote log
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+        run: |
+          ssh $OCI_USER@$OCI_HOST "journalctl -u signalzero.service -n 50" > remote_log.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-deploy-log
+          path: remote_log.txt
