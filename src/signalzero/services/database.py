@@ -144,7 +144,7 @@ class InMemoryRedis:
     def keys(self, pattern: str):
         import fnmatch
         # Simple glob matching
-        return [k for k in self.store.keys() if fnmatch.fnmatch(k, pattern)]
+        return [k for k in self.store if fnmatch.fnmatch(k, pattern)]
 
     def ping(self):
         return True

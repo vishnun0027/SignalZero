@@ -125,7 +125,7 @@ def run_convergent_discovery_detector(db: Session, lookback_days: int = 90, simi
 
             # Find max similarity of centroid to any historical paper
             max_hist_sim = 0.0
-            for o_paper, o_emb in older_entries:
+            for _o_paper, o_emb in older_entries:
                 o_emb_val = o_emb.embedding
                 o_emb_list = json.loads(o_emb_val) if isinstance(o_emb_val, str) else list(o_emb_val)
                 sim = cosine_similarity(centroid, o_emb_list)

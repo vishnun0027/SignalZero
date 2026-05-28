@@ -70,7 +70,7 @@ def health_check():
 def get_signals(
     status: str = Query(None, description="Filter signals by status (emerging, growing, false_positive)"),
     type: str = Query(None, description="Filter signals by type (cross_field, vocab_drift, convergent)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db)  # noqa: B008
 ):
     """Retrieves detected weak signals, sorted by date and confidence."""
     query = db.query(Signal)
@@ -103,7 +103,7 @@ def get_signals(
     return result
 
 @app.get("/api/signals/{signal_id}")
-def get_signal_detail(signal_id: int, db: Session = Depends(get_db)):
+def get_signal_detail(signal_id: int, db: Session = Depends(get_db)):  # noqa: B008
     """Retrieves a single signal in detail."""
     signal = db.query(Signal).filter(Signal.id == signal_id).first()
     if not signal:
@@ -198,7 +198,7 @@ def get_citation_graph(arxiv_id: str):
     return {"nodes": nodes, "links": links}
 
 @app.get("/api/stats")
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(db: Session = Depends(get_db)):  # noqa: B008
     """Computes high-level database metrics for dashboard statistics cards."""
     total_papers = db.query(Paper).count()
     total_signals = db.query(Signal).count()
@@ -243,19 +243,19 @@ def run_detection_pipeline_sync(db: Session):
         analyze_signal_with_agent(db, int(s.id))
 
 @app.post("/api/detect")
-def trigger_detection(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def trigger_detection(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):  # noqa: B008
     """Triggers signal detectors and LangGraph research agent workflows in background."""
     background_tasks.add_task(run_detection_pipeline_sync, db)
     return {"message": "Detection and LangGraph agent workflow triggered in background."}
 
 @app.post("/api/ingest")
-def trigger_ingestion(limit: int = 10, db: Session = Depends(get_db)):
+def trigger_ingestion(limit: int = 10, db: Session = Depends(get_db)):  # noqa: B008
     """Manually triggers arXiv/Semantic Scholar paper ingestion."""
     count = ingest_daily_papers(db, limit=limit)
     return {"message": f"Successfully ingested {count} papers."}
 
 @app.post("/api/digest")
-def trigger_digest(db: Session = Depends(get_db)):
+def trigger_digest(db: Session = Depends(get_db)):  # noqa: B008
     """Manually triggers weekly digest compilation and notification dispatch."""
     from signalzero.services.notifications import compile_and_send_weekly_digest
     success = compile_and_send_weekly_digest(db)

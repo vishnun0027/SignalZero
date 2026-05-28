@@ -5,6 +5,7 @@ import logging
 import time
 
 import requests
+from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from signalzero.models.models import Paper, Signal
