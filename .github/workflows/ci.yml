@@ -67,7 +67,39 @@ jobs:
           port: 22
           script: |
             set -e
-            cd $HOME/worklab/SignalZero
+            
+            echo "=== Probing Remote Server Environment ==="
+            echo "Current User: $(whoami)"
+            echo "Home Directory: $HOME"
+            echo "Current Path: $(pwd)"
+            echo "Directories in $HOME:"
+            ls -la $HOME
+            
+            # Find the correct directory or clone it
+            APP_DIR=""
+            if [ -d "$HOME/worklab/SignalZero" ]; then
+              APP_DIR="$HOME/worklab/SignalZero"
+            elif [ -d "$HOME/SignalZero" ]; then
+              APP_DIR="$HOME/SignalZero"
+            else
+              # Search for SignalZero in $HOME
+              FOUND_DIR=$(find $HOME -maxdepth 3 -type d -name "SignalZero" | head -n 1)
+              if [ -n "$FOUND_DIR" ]; then
+                APP_DIR="$FOUND_DIR"
+              else
+                echo "--- SignalZero directory not found, cloning to $HOME/worklab/SignalZero ---"
+                mkdir -p "$HOME/worklab"
+                git clone https://github.com/vishnun0027/SignalZero.git "$HOME/worklab/SignalZero"
+                APP_DIR="$HOME/worklab/SignalZero"
+                # Copy example env to .env if not exists
+                if [ ! -f "$APP_DIR/.env" ]; then
+                  cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+                fi
+              fi
+            fi
+
+            echo "✅ Deploying to APP_DIR: $APP_DIR"
+            cd "$APP_DIR"
             export PATH="$HOME/.local/bin:$PATH"
 
             echo "--- Pulling latest code ---"
@@ -79,8 +111,15 @@ jobs:
 
             echo "--- Installing systemd service files ---"
             mkdir -p ~/.config/systemd/user/
-            cp $HOME/worklab/SignalZero/signalzero*.service ~/.config/systemd/user/
-            cp $HOME/worklab/SignalZero/signalzero*.timer ~/.config/systemd/user/
+            for f in signalzero*.service; do
+              sed -e "s|/home/vishnu/worklab/SignalZero|$APP_DIR|g" \
+                  -e "/^User=/d" \
+                  -e "/^Group=/d" \
+                  "$f" > ~/.config/systemd/user/"$f"
+            done
+            for f in signalzero*.timer; do
+              cp "$f" ~/.config/systemd/user/"$f"
+            done
 
             echo "--- Reloading systemd and restarting services ---"
             systemctl --user daemon-reload
