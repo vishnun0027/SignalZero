@@ -4,6 +4,7 @@ from src.ingestion import ingest_daily_papers
 from src.detectors.vocab_drift import run_vocab_emergence_detector
 from src.detectors.cross_field import run_cross_field_detector
 from src.detectors.convergent import run_convergent_discovery_detector
+from src.detectors.hackernews import run_hn_detector
 from src.agent.graph import analyze_signal_with_agent
 from src.models import Signal
 
@@ -29,6 +30,9 @@ def run_pipeline():
         
         logger.info("Running Convergent Discovery Detector...")
         run_convergent_discovery_detector(db)
+        
+        logger.info("Running HackerNews Community Detector...")
+        run_hn_detector(db)
         
         logger.info("--- Step 3: Triggering AI Agent on Emerging Signals ---")
         # Fetch signals that need analysis (status='emerging' but no brief generated yet)

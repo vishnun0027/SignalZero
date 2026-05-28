@@ -13,7 +13,8 @@ def format_discord_embed(signal_type: str, confidence: float, trigger_details: d
     title_map = {
         "cross_field": "🚨 Cross-Field Citation Anomaly Detected",
         "vocab_drift": "📈 Vocabulary Emergence Monitor Shift",
-        "convergent": "👥 Convergent Discovery Group Detected"
+        "convergent": "👥 Convergent Discovery Group Detected",
+        "hn_community": "🔥 HackerNews Community Signal Detected"
     }
     title = title_map.get(signal_type, "💡 New Weak Signal Detected")
     
@@ -72,6 +73,20 @@ def format_discord_embed(signal_type: str, confidence: float, trigger_details: d
             papers_desc.append(f"• [{p.get('title')}](https://arxiv.org/abs/{p.get('arxiv_id')})")
         if papers_desc:
             description = "\n".join(papers_desc)
+
+    elif signal_type == "hn_community":
+        hn_title = trigger_details.get("hn_title", "Unknown HN Post")
+        hn_url = trigger_details.get("hn_url", "")
+        fields.append({
+            "name": "HackerNews Post",
+            "value": f"[{hn_title}]({hn_url})",
+            "inline": False
+        })
+        fields.append({
+            "name": "Points / Comments",
+            "value": f"🔺 {trigger_details.get('points', 0)} points | 💬 {trigger_details.get('comments', 0)} comments",
+            "inline": True
+        })
 
     # Format brief into sections if it isn't empty
     if brief:
@@ -186,7 +201,8 @@ def send_weekly_digest_discord(signals: list) -> bool:
         title_map = {
             "cross_field": "Cross-Field Citation Anomaly",
             "vocab_drift": "Vocabulary Emergence Monitor",
-            "convergent": "Convergent Discovery Group"
+            "convergent": "Convergent Discovery Group",
+            "hn_community": "HackerNews Community Signal"
         }
         type_title = title_map.get(signal.type, "Emerging Signal")
         
@@ -202,6 +218,11 @@ def send_weekly_digest_discord(signals: list) -> bool:
         elif signal.type == "convergent":
             papers = details.get("papers", [])
             description_parts.append(f"**Cluster Size:** {len(papers)} independent papers")
+        elif signal.type == "hn_community":
+            hn_title = details.get("hn_title", "Unknown HN Post")
+            hn_url = details.get("hn_url", "")
+            description_parts.append(f"**HackerNews Post:** [{hn_title}]({hn_url})")
+            description_parts.append(f"**Points / Comments:** 🔺 {details.get('points', 0)} points | 💬 {details.get('comments', 0)} comments")
             
         if signal.brief:
             brief_text = signal.brief
@@ -268,7 +289,8 @@ def send_weekly_digest_slack(signals: list) -> bool:
         title_map = {
             "cross_field": "Cross-Field Citation Anomaly",
             "vocab_drift": "Vocabulary Emergence Monitor",
-            "convergent": "Convergent Discovery Group"
+            "convergent": "Convergent Discovery Group",
+            "hn_community": "HackerNews Community Signal"
         }
         type_title = title_map.get(signal.type, "Emerging Signal")
         
@@ -284,6 +306,11 @@ def send_weekly_digest_slack(signals: list) -> bool:
         elif signal.type == "convergent":
             papers = details.get("papers", [])
             detail_lines.append(f"*Cluster Size:* {len(papers)} independent papers")
+        elif signal.type == "hn_community":
+            hn_title = details.get("hn_title", "Unknown HN Post")
+            hn_url = details.get("hn_url", "")
+            detail_lines.append(f"*HackerNews Post:* <{hn_url}|{hn_title}>")
+            detail_lines.append(f"*Points / Comments:* 🔺 {details.get('points', 0)} | 💬 {details.get('comments', 0)}")
             
         brief_text = signal.brief or ""
         if len(brief_text) > 400:

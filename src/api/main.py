@@ -11,6 +11,7 @@ from src.ingestion import ingest_daily_papers
 from src.detectors.cross_field import run_cross_field_detector
 from src.detectors.vocab_drift import run_vocab_emergence_detector
 from src.detectors.convergent import run_convergent_discovery_detector
+from src.detectors.hackernews import run_hn_detector
 from src.agent.graph import analyze_signal_with_agent
 
 # Initialize logging and database tables
@@ -229,6 +230,7 @@ def run_detection_pipeline_sync(db: Session):
     run_cross_field_detector(db)
     run_vocab_emergence_detector(db)
     run_convergent_discovery_detector(db)
+    run_hn_detector(db)
     
     # 2. Query all unanalyzed signals in database (brief is null) and run LangGraph agent
     unanalyzed = db.query(Signal).filter(Signal.brief.is_(None)).all()

@@ -2,6 +2,7 @@ import json
 import datetime
 import logging
 import sys
+import requests
 
 # --- Mock ADWIN before importing detectors to ensure it is used during backtest ---
 class MockADWIN:
@@ -17,6 +18,40 @@ river_drift.ADWIN = MockADWIN # type: ignore
 sys.modules["river.drift"] = river_drift
 sys.modules["river"] = types.ModuleType("river")
 
+# --- Mock requests.get to intercept Algolia HackerNews searches ---
+original_get = requests.get
+def mock_requests_get(url, *args, **kwargs):
+    if "hn.algolia.com/api/v1/search" in url:
+        params = kwargs.get("params", {})
+        query = params.get("query", "")
+        
+        mock_response = requests.Response()
+        mock_response.status_code = 200
+        
+        hits = []
+        if query == "1706.03762":
+            hits = [{
+                "objectID": "14561234",
+                "title": "Attention Is All You Need",
+                "points": 180,
+                "num_comments": 45,
+                "created_at": "2017-06-15T15:23:44.000Z"
+            }]
+        elif query == "2106.09685":
+            hits = [{
+                "objectID": "27561234",
+                "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+                "points": 120,
+                "num_comments": 25,
+                "created_at": "2021-06-18T10:00:00.000Z"
+            }]
+            
+        mock_response._content = json.dumps({"hits": hits}).encode("utf-8")
+        return mock_response
+    return original_get(url, *args, **kwargs)
+
+requests.get = mock_requests_get
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from src.database import Base
@@ -24,6 +59,7 @@ from src.models import Paper, PaperEmbedding, Signal
 from src.detectors.cross_field import run_cross_field_detector
 from src.detectors.vocab_drift import run_vocab_emergence_detector
 from src.detectors.convergent import run_convergent_discovery_detector
+from src.detectors.hackernews import run_hn_detector
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("SignalZero.Backtest")
@@ -172,6 +208,7 @@ def run_backtest():
     run_cross_field_detector(db)
     run_vocab_emergence_detector(db, lookback_days=30)
     run_convergent_discovery_detector(db, lookback_days=30)
+    run_hn_detector(db, lookback_days=30)
     
     # 5. Evaluate and display metrics
     total_signals = db.query(Signal).count()
@@ -191,7 +228,9 @@ def run_backtest():
         "LoRA": {"type": "convergent", "detected": False, "target_lead_time": "9 months"},
         "self-attention": {"type": "vocab_drift", "detected": False, "target_lead_time": "20 months"},
         "diffusion model": {"type": "vocab_drift", "detected": False, "target_lead_time": "12 months"},
-        "lora": {"type": "vocab_drift", "detected": False, "target_lead_time": "9 months"}
+        "lora": {"type": "vocab_drift", "detected": False, "target_lead_time": "9 months"},
+        "Attention Is All You Need (HN)": {"type": "hn_community", "detected": False, "target_lead_time": "28 months"},
+        "LoRA (HN)": {"type": "hn_community", "detected": False, "target_lead_time": "9 months"}
     }
     
     signals_in_db = db.query(Signal).all()
@@ -208,7 +247,7 @@ def run_backtest():
         if sig.type == "cross_field":
             title = details.get("title", "")
             for target_title in targets:
-                if target_title.lower() in title.lower():
+                if target_title.lower() in title.lower() and "hn" not in target_title.lower():
                     targets[target_title]["detected"] = True
                     matched = True
                     lead_time = targets[target_title]["target_lead_time"]
@@ -232,6 +271,16 @@ def run_backtest():
             lead_time = targets["LoRA"]["target_lead_time"]
             cluster_str = f"Convergent LoRA Cluster (size {details.get('cluster_size')})"
             print(f"{cluster_str:<50} | {sig.type:<15} | {conf_pct:<6} | {lead_time}")
+            
+        elif sig.type == "hn_community":
+            title = details.get("paper_title", "")
+            for target_title in targets:
+                if target_title.replace(" (HN)", "").lower() in title.lower() and "hn" in target_title.lower():
+                    targets[target_title]["detected"] = True
+                    matched = True
+                    lead_time = targets[target_title]["target_lead_time"]
+                    print(f"{target_title[:50]:<50} | {sig.type:<15} | {conf_pct:<6} | {lead_time}")
+                    break
             
         if matched:
             true_positives += 1
