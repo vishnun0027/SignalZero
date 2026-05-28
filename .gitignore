@@ -15,3 +15,5 @@ wheels/
 jwt_secret.txt
 *.db
 
+# Temporary & Swap files
+*.swp
