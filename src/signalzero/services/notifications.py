@@ -164,12 +164,10 @@ def send_slack_notification(signal_type: str, confidence: float, trigger_details
 def dispatch_notifications(signal_type: str, confidence: float, trigger_details: dict[str, Any], brief: str) -> bool:
     """Dispatches notifications to all enabled channels. Returns True if any dispatch succeeded."""
     success = False
-    if settings.DISCORD_WEBHOOK_URL:
-        if send_discord_notification(signal_type, confidence, trigger_details, brief):
-            success = True
-    if settings.SLACK_WEBHOOK_URL:
-        if send_slack_notification(signal_type, confidence, trigger_details, brief):
-            success = True
+    if settings.DISCORD_WEBHOOK_URL and send_discord_notification(signal_type, confidence, trigger_details, brief):
+        success = True
+    if settings.SLACK_WEBHOOK_URL and send_slack_notification(signal_type, confidence, trigger_details, brief):
+        success = True
     return success
 
 def send_weekly_digest_discord(signals: list[Any]) -> bool:
