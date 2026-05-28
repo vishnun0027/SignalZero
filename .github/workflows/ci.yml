@@ -68,6 +68,11 @@ jobs:
           script: |
             set -e
             
+            # Enable systemd user manager lingering and export session variables
+            loginctl enable-linger || true
+            export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+            
             echo "=== Probing Remote Server Environment ==="
             echo "Current User: $(whoami)"
             echo "Home Directory: $HOME"
