@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+3name: CI/CD Pipeline
 
 on:
   push:
@@ -62,12 +62,12 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: vishnu
+          username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
             set -e
-            cd /home/vishnu/worklab/SignalZero
+            cd $HOME/worklab/SignalZero
             export PATH="$HOME/.local/bin:$PATH"
 
             echo "--- Pulling latest code ---"
@@ -79,8 +79,8 @@ jobs:
 
             echo "--- Installing systemd service files ---"
             mkdir -p ~/.config/systemd/user/
-            cp /home/vishnu/worklab/SignalZero/signalzero*.service ~/.config/systemd/user/
-            cp /home/vishnu/worklab/SignalZero/signalzero*.timer ~/.config/systemd/user/
+            cp $HOME/worklab/SignalZero/signalzero*.service ~/.config/systemd/user/
+            cp $HOME/worklab/SignalZero/signalzero*.timer ~/.config/systemd/user/
 
             echo "--- Reloading systemd and restarting services ---"
             systemctl --user daemon-reload
