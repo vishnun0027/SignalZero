@@ -12,7 +12,7 @@ class MockADWIN:
         pass
 
 # Inject the mock ADWIN into sys.modules to intercept imports
-import types
+import types  # noqa: E402
 river_drift = types.ModuleType("river.drift")
 river_drift.ADWIN = MockADWIN # type: ignore
 sys.modules["river.drift"] = river_drift
@@ -52,14 +52,14 @@ def mock_requests_get(url, *args, **kwargs):
 
 requests.get = mock_requests_get
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from src.database import Base
-from src.models import Paper, PaperEmbedding, Signal
-from src.detectors.cross_field import run_cross_field_detector
-from src.detectors.vocab_drift import run_vocab_emergence_detector
-from src.detectors.convergent import run_convergent_discovery_detector
-from src.detectors.hackernews import run_hn_detector
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from src.database import Base  # noqa: E402
+from src.models import Paper, PaperEmbedding, Signal  # noqa: E402
+from src.detectors.cross_field import run_cross_field_detector  # noqa: E402
+from src.detectors.vocab_drift import run_vocab_emergence_detector  # noqa: E402
+from src.detectors.convergent import run_convergent_discovery_detector  # noqa: E402
+from src.detectors.hackernews import run_hn_detector  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("SignalZero.Backtest")
