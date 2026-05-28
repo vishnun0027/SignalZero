@@ -71,7 +71,6 @@ jobs:
             # Enable systemd user manager lingering and export session variables
             loginctl enable-linger || true
             export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-            export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
             
             echo "=== Probing Remote Server Environment ==="
             echo "Current User: $(whoami)"
@@ -132,10 +131,18 @@ jobs:
             systemctl --user restart signalzero_api.service signalzero.timer signalzero_digest.timer
 
             echo "--- Verifying deployment (health check) ---"
-            sleep 5
-            if curl --fail --silent --show-error http://localhost:8007/api/health; then
-              echo "✅ API health check passed"
-            else
+            HEALTH_PASSED=false
+            for i in {1..8}; do
+              echo "Health check attempt $i/8..."
+              if curl --fail --silent --show-error http://localhost:8007/api/health; then
+                echo "✅ API health check passed"
+                HEALTH_PASSED=true
+                break
+              fi
+              sleep 5
+            done
+
+            if [ "$HEALTH_PASSED" = false ]; then
               echo "❌ API health check FAILED"
               echo "=== Journalctl API logs ==="
               journalctl --user -u signalzero_api.service -n 100 --no-pager || true

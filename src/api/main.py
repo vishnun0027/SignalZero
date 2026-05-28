@@ -263,4 +263,5 @@ def trigger_digest(db: Session = Depends(get_db)):
 
 if __name__ == "__main__":
     # Standard compliance: bind FastAPI strictly to 127.0.0.1 for development/testing
-    uvicorn.run("src.api.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+    reload_mode = (settings.ENV == "development")
+    uvicorn.run("src.api.main:app", host=settings.HOST, port=settings.PORT, reload=reload_mode)
