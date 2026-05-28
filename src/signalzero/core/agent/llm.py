@@ -76,19 +76,19 @@ def generate_mock_brief(user_prompt: str) -> str:
         type_str = "Convergent Discovery Monitor"
 
     brief_template = f"""### {type_str} Analysis: {title}
- 
+
 **Core Novelty:**
 This signal highlights an important research pivot. Preliminary review suggests it introduces a novel methodology to optimize model parameters, reduce computational overhead, or address domain-specific boundaries by adapting architectural patterns from adjacent fields.
- 
+
 **Why It Matters:**
 - **Cross-Domain Utility:** Early citations and semantic overlaps demonstrate applications spanning NLP, computer vision, and systems optimization.
 - **Velocity Acceleration:** Relative frequency shifts indicate this concept is transitioning from isolated proposal to active community experimentation.
 - **Independent Validation:** Multiple research entities are exploring similar boundaries concurrently without institutional overlap.
- 
+
 **Potential Applications:**
 - Scalable model serving and local deployment on constrained hardware.
 - Multi-modal representation alignment and robust transfer learning paradigms.
- 
+
 **Watch List:**
 - Watch for repository updates, community benchmarks, and downstream variants adapting this core mechanism over the next 90 days.
 """

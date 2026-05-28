@@ -1,5 +1,5 @@
-import datetime
 import contextlib
+import datetime
 import json
 import logging
 import time
@@ -8,9 +8,7 @@ import requests
 from sqlalchemy.orm import Session
 
 from signalzero.models.models import Paper, Signal
-from signalzero.services.database import get_redis, get_db
-from signalzero.core.config import settings
-from signalzero.notifications import send_discord_notification, send_slack_notification
+from signalzero.services.database import get_db, get_redis
 
 logger = logging.getLogger("SignalZero.Detector.HackerNews")
 
