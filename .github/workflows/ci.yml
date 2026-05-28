@@ -128,9 +128,18 @@ jobs:
 
             echo "--- Verifying deployment (health check) ---"
             sleep 5
-            curl --fail --silent --show-error http://localhost:8007/api/health \
-              && echo "✅ API health check passed" \
-              || (echo "❌ API health check FAILED" && exit 1)
+            if curl --fail --silent --show-error http://localhost:8007/api/health; then
+              echo "✅ API health check passed"
+            else
+              echo "❌ API health check FAILED"
+              echo "=== Journalctl API logs ==="
+              journalctl --user -u signalzero_api.service -n 100 --no-pager || true
+              echo "=== Service Status ==="
+              systemctl --user status signalzero_api.service || true
+              echo "=== signalzero.log content ==="
+              cat "$APP_DIR/signalzero.log" || true
+              exit 1
+            fi
 
             echo "--- Checking service statuses ---"
             systemctl --user is-active --quiet signalzero_api.service \
