@@ -26,3 +26,42 @@ dependencies = [
     "uvicorn>=0.28.0",
     "ruff>=0.1.0",
 ]
+
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["signalzero"]
+package-dir = {"" = "src"}
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]   # Line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["signalzero"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term-missing"
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
+
+

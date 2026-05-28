@@ -1,0 +1,16 @@
+[Unit]
+Description=SignalZero weekly digest dispatch
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/vishnu/worklab/SignalZero
+ExecStart=/home/vishnu/worklab/SignalZero/.venv/bin/python scripts/weekly_digest.py
+StandardOutput=append:/home/vishnu/worklab/SignalZero/signalzero.log
+StandardError=append:/home/vishnu/worklab/SignalZero/signalzero.log
+EnvironmentFile=/home/vishnu/worklab/SignalZero/.env
+User=vishnu
+Group=vishnu
+
+[Install]
+WantedBy=default.target

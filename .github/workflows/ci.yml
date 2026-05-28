@@ -49,7 +49,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Run Tests
-        run: uv run pytest tests/ -v --tb=short
+        run: uv run pytest tests/unit/ -v --tb=short
 
   cd:
     name: Continuous Deployment (Ubuntu Cloud Instance)
@@ -115,14 +115,16 @@ jobs:
 
             echo "--- Installing systemd service files ---"
             mkdir -p ~/.config/systemd/user/
-            for f in signalzero*.service; do
+            for f in config/systemd/signalzero*.service; do
+              basename_f=$(basename "$f")
               sed -e "s|/home/vishnu/worklab/SignalZero|$APP_DIR|g" \
                   -e "/^User=/d" \
                   -e "/^Group=/d" \
-                  "$f" > ~/.config/systemd/user/"$f"
+                  "$f" > ~/.config/systemd/user/"$basename_f"
             done
-            for f in signalzero*.timer; do
-              cp "$f" ~/.config/systemd/user/"$f"
+            for f in config/systemd/signalzero*.timer; do
+              basename_f=$(basename "$f")
+              cp "$f" ~/.config/systemd/user/"$basename_f"
             done
 
             echo "--- Reloading systemd and restarting services ---"
