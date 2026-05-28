@@ -1,13 +1,15 @@
-import json
 import datetime
+import json
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from signalzero.services.database import Base, InMemoryRedis, InMemoryNeo4j
-from signalzero.models.models import Paper, PaperEmbedding
+
+from signalzero.core.detectors.convergent import run_convergent_discovery_detector
 from signalzero.core.detectors.cross_field import run_cross_field_detector
 from signalzero.core.detectors.vocab_drift import extract_ngrams
-from signalzero.core.detectors.convergent import run_convergent_discovery_detector
+from signalzero.models.models import Paper, PaperEmbedding
+from signalzero.services.database import Base, InMemoryNeo4j, InMemoryRedis
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
@@ -17,13 +19,13 @@ def fixture_db_session():
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = TestingSessionLocal()
-    
+
     # Initialize in-memory database connections for the tests
     # Force mock DB state
     from signalzero.services import database
     database.redis_client = InMemoryRedis()
     database.neo4j_driver = InMemoryNeo4j()
-    
+
     try:
         yield session
     finally:
@@ -77,14 +79,14 @@ def test_convergent_discovery_clustering(db_session):
     )
     db_session.add_all([p1, p2, p3])
     db_session.flush()
-    
+
     # Insert near-identical embeddings (all-ones vectors to guarantee cosine similarity = 1.0)
     emb_vec = [1.0] * 384
     db_session.add(PaperEmbedding(paper_id=p1.arxiv_id, embedding=json.dumps(emb_vec)))
     db_session.add(PaperEmbedding(paper_id=p2.arxiv_id, embedding=json.dumps(emb_vec)))
     db_session.add(PaperEmbedding(paper_id=p3.arxiv_id, embedding=json.dumps(emb_vec)))
     db_session.commit()
-    
+
     # Run the detector
     signals = run_convergent_discovery_detector(db_session)
     assert len(signals) >= 1

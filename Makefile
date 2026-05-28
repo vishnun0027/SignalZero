@@ -1,7 +1,7 @@
 .PHONY: lint test run
 
 lint:
-	uv run ruff check .
+	uv run ruff check . --fix
 
 test:
 	uv run pytest tests/unit/ -v

@@ -1,8 +1,10 @@
-import json
 import datetime
+import json
 import logging
 import sys
+
 import requests
+
 
 # --- Mock ADWIN before importing detectors to ensure it is used during backtest ---
 class MockADWIN:
@@ -13,6 +15,7 @@ class MockADWIN:
 
 # Inject the mock ADWIN into sys.modules to intercept imports
 import types  # noqa: E402
+
 river_drift = types.ModuleType("river.drift")
 river_drift.ADWIN = MockADWIN # type: ignore
 sys.modules["river.drift"] = river_drift
@@ -24,10 +27,10 @@ def mock_requests_get(url, *args, **kwargs):
     if "hn.algolia.com/api/v1/search" in url:
         params = kwargs.get("params", {})
         query = params.get("query", "")
-        
+
         mock_response = requests.Response()
         mock_response.status_code = 200
-        
+
         hits = []
         if query == "1706.03762":
             hits = [{
@@ -45,7 +48,7 @@ def mock_requests_get(url, *args, **kwargs):
                 "num_comments": 25,
                 "created_at": "2021-06-18T10:00:00.000Z"
             }]
-            
+
         mock_response._content = json.dumps({"hits": hits}).encode("utf-8")
         return mock_response
     return original_get(url, *args, **kwargs)
@@ -54,12 +57,13 @@ requests.get = mock_requests_get
 
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
-from signalzero.services.database import Base  # noqa: E402
-from signalzero.models.models import Paper, PaperEmbedding, Signal  # noqa: E402
-from signalzero.core.detectors.cross_field import run_cross_field_detector  # noqa: E402
-from signalzero.core.detectors.vocab_drift import run_vocab_emergence_detector  # noqa: E402
+
 from signalzero.core.detectors.convergent import run_convergent_discovery_detector  # noqa: E402
+from signalzero.core.detectors.cross_field import run_cross_field_detector  # noqa: E402
 from signalzero.core.detectors.hackernews import run_hn_detector  # noqa: E402
+from signalzero.core.detectors.vocab_drift import run_vocab_emergence_detector  # noqa: E402
+from signalzero.models.models import Paper, PaperEmbedding, Signal  # noqa: E402
+from signalzero.services.database import Base  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("SignalZero.Backtest")
@@ -121,21 +125,21 @@ class BacktestRedis:
 
 def run_backtest():
     logger.info("=== Starting SignalZero Historical Backtest (Simulation) ===")
-    
+
     # 1. Setup isolated in-memory database
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = TestingSessionLocal()
-    
+
     # 2. Inject backtest mocks
     from signalzero.services import database
     database.neo4j_driver = BacktestNeo4j()
     database.redis_client = BacktestRedis()
-    
+
     # 3. Seed historical papers with relative dates and search neologisms
     logger.info("Seeding historical papers into database...")
-    
+
     seeded_papers = [
         # Paper 1: Attention
         Paper(
@@ -187,10 +191,10 @@ def run_backtest():
             primary_category="cs.LG", all_categories="cs.LG"
         )
     ]
-    
+
     db.add_all(seeded_papers)
     db.flush()
-    
+
     # Attach semantic embeddings for Convergent Discovery clustering (near-identical vectors to force cluster)
     emb_vec = [1.0] * 384
     for p in seeded_papers:
@@ -199,27 +203,27 @@ def run_backtest():
         else:
             # random vectors
             db.add(PaperEmbedding(paper_id=p.arxiv_id, embedding=json.dumps([0.0] * 384)))
-            
+
     db.commit()
-    
+
     # 4. Execute detectors
     logger.info("Running detectors on seeded historical snapshot...")
-    
+
     run_cross_field_detector(db)
     run_vocab_emergence_detector(db, lookback_days=30)
     run_convergent_discovery_detector(db, lookback_days=30)
     run_hn_detector(db, lookback_days=30)
-    
+
     # 5. Evaluate and display metrics
     total_signals = db.query(Signal).count()
-    
+
     print("\n" + "="*80)
     print("                      HISTORICAL BACKTEST RESULTS SUMMARY")
     print("="*80)
     print(f"Total Seeded Papers:    {len(seeded_papers)}")
     print(f"Total Signals Flagged:  {total_signals}")
     print("-"*80)
-    
+
     # Target breakthrough list for recall checks
     targets = {
         "Attention Is All You Need": {"type": "cross_field", "detected": False, "target_lead_time": "28 months"},
@@ -232,18 +236,18 @@ def run_backtest():
         "Attention Is All You Need (HN)": {"type": "hn_community", "detected": False, "target_lead_time": "28 months"},
         "LoRA (HN)": {"type": "hn_community", "detected": False, "target_lead_time": "9 months"}
     }
-    
+
     signals_in_db = db.query(Signal).all()
-    
+
     print(f"{'Concept / Paper Title':<50} | {'Signal Type':<15} | {'Conf':<6} | {'Lead Time'}")
     print("-"*80)
-    
+
     true_positives = 0
     for sig in signals_in_db:
         matched = False
         conf_pct = f"{sig.confidence * 100:.1f}%"
         details = json.loads(sig.trigger_details)
-        
+
         if sig.type == "cross_field":
             title = details.get("title", "")
             for target_title in targets:
@@ -253,7 +257,7 @@ def run_backtest():
                     lead_time = targets[target_title]["target_lead_time"]
                     print(f"{target_title[:50]:<50} | {sig.type:<15} | {conf_pct:<6} | {lead_time}")
                     break
-                    
+
         elif sig.type == "vocab_drift":
             term = details.get("term", "")
             for target_term in targets:
@@ -264,14 +268,14 @@ def run_backtest():
                     term_str = f"vocab: '{term}'"
                     print(f"{term_str:<50} | {sig.type:<15} | {conf_pct:<6} | {lead_time}")
                     break
-                    
+
         elif sig.type == "convergent":
             targets["LoRA"]["detected"] = True
             matched = True
             lead_time = targets["LoRA"]["target_lead_time"]
             cluster_str = f"Convergent LoRA Cluster (size {details.get('cluster_size')})"
             print(f"{cluster_str:<50} | {sig.type:<15} | {conf_pct:<6} | {lead_time}")
-            
+
         elif sig.type == "hn_community":
             title = details.get("paper_title", "")
             for target_title in targets:
@@ -281,26 +285,26 @@ def run_backtest():
                     lead_time = targets[target_title]["target_lead_time"]
                     print(f"{target_title[:50]:<50} | {sig.type:<15} | {conf_pct:<6} | {lead_time}")
                     break
-            
+
         if matched:
             true_positives += 1
-            
+
     print("-"*80)
-    
+
     # Calculate Precision & Recall
     detected_count = sum(1 for t in targets.values() if t["detected"])
     recall = (detected_count / len(targets)) * 100
     precision = (true_positives / total_signals * 100) if total_signals > 0 else 0
-    
+
     print(f"Precision: {precision:.1f}%  (True signals / Total flagged)")
     print(f"Recall:    {recall:.1f}%  (Target breakthroughs detected: {detected_count}/{len(targets)})")
-    
+
     if precision >= 40.0 and recall >= 70.0:
         print("Status:    SUCCESS (Exceeded minimum precision threshold of 40.0% and recall of 70.0%)")
     else:
         print("Status:    FAILED (Failed to meet minimum precision threshold of 40.0% or recall of 70.0%)")
     print("="*80 + "\n")
-    
+
     db.close()
 
 if __name__ == "__main__":

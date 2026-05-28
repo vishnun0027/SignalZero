@@ -1,6 +1,8 @@
 import datetime
-from sqlalchemy import Column, String, Integer, Text, Date, Float, DateTime, ForeignKey
+
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
+
 from signalzero.services.database import Base
 from signalzero.utils.config import settings
 

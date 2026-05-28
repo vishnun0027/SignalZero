@@ -1,4 +1,5 @@
 import logging
+
 from signalzero.utils.config import settings
 
 logger = logging.getLogger("SignalZero.Agent.LLM")
@@ -53,12 +54,12 @@ def generate_mock_brief(user_prompt: str) -> str:
     """Generates structured, professional briefings based on the input context."""
     # Attempt to extract context details from the prompt
     title = "Selected Concept"
-    
+
     import re
     title_match = re.search(r"Title:\s*([^\n]+)", user_prompt)
     if title_match:
         title = title_match.group(1).strip()
-        
+
     term_match = re.search(r"Term:\s*([^\n]+)", user_prompt)
     if term_match:
         title = f"Vocabulary Emergence: '{term_match.group(1).strip()}'"

@@ -1,11 +1,13 @@
-import os
-import time
 import logging
-import requests
+import os
 import random
+import time
+
+import requests
 from sqlalchemy.orm import Session
-from signalzero.services.database import get_neo4j, get_redis
+
 from signalzero.models.models import Paper, PaperEmbedding
+from signalzero.services.database import get_neo4j, get_redis
 
 logger = logging.getLogger("SignalZero.Ingestion")
 
@@ -26,7 +28,7 @@ def get_embedding(text: str) -> list[float]:
             return emb.tolist()
         except Exception as e:
             logger.error(f"Error generating embedding: {e}. Falling back to mock vector.")
-            
+
     # Mock fallback: 384 floats normalized
     vec = [random.uniform(-0.1, 0.1) for _ in range(384)]
     norm = sum(x*x for x in vec) ** 0.5
@@ -44,7 +46,7 @@ def fetch_arxiv_papers(limit: int = 50) -> list[dict]:
         max_results=limit,
         sort_by=arxiv.SortCriterion.SubmittedDate
     )
-    
+
     results = []
     try:
         # arXiv client yields papers. We attempt to fetch them with exponential backoff.
@@ -82,7 +84,7 @@ def fetch_arxiv_papers(limit: int = 50) -> list[dict]:
             })
     except Exception as e:
         logger.error(f"Error fetching from arXiv API: {e}")
-        
+
     logger.info(f"Fetched {len(results)} papers from arXiv.")
     return results
 
@@ -102,7 +104,7 @@ def enrich_with_semantic_scholar(arxiv_id: str) -> dict:
 
     url = f"https://api.semanticscholar.org/graph/v1/paper/arXiv:{arxiv_id}"
     params = {"fields": "citationCount,referenceCount,citations,references,s2FieldsOfStudy,tldr"}
-    
+
     # Check Redis cache first to avoid API limits
     redis_client = get_redis()
     cache_key = f"s2_cache:{arxiv_id}"
@@ -128,7 +130,7 @@ def enrich_with_semantic_scholar(arxiv_id: str) -> dict:
             else:
                 # 100 req / 5 mins -> 3.0 sec per request to avoid limit
                 time.sleep(3.1)
-                
+
             res = requests.get(url, params=params, headers=headers, timeout=15)
             if res.status_code == 200:
                 data = res.json()
@@ -146,7 +148,7 @@ def enrich_with_semantic_scholar(arxiv_id: str) -> dict:
         except Exception as e:
             logger.error(f"Error fetching from Semantic Scholar: {e}")
             time.sleep(5.0)
-        
+
     return {
         "citationCount": 0,
         "referenceCount": 0,
@@ -161,12 +163,12 @@ def update_neo4j_citation_graph(paper_data: dict, s2_data: dict):
     driver = get_neo4j()
     if driver is None:
         return
-        
+
     arxiv_id = paper_data["arxiv_id"]
     title = paper_data["title"]
     pub_date = str(paper_data["published_date"])
     primary_field = paper_data["primary_category"]
-    
+
     # Merge paper node
     merge_query = """
     MERGE (p:Paper {arxiv_id: $arxiv_id})
@@ -178,10 +180,10 @@ def update_neo4j_citation_graph(paper_data: dict, s2_data: dict):
         "pub_date": pub_date,
         "primary_field": primary_field
     }
-    
+
     try:
         driver.execute_query(merge_query, params)
-        
+
         # Add outbound CITES references if they exist
         references = s2_data.get("references", [])
         if references:
@@ -191,7 +193,7 @@ def update_neo4j_citation_graph(paper_data: dict, s2_data: dict):
                 if ref_arxiv_id:
                     ref_title = ref.get("title", "Unknown Ref")
                     ref_field = ref.get("s2FieldsOfStudy", [{"category": "cs.LG"}])[0].get("category", "cs.LG") if ref.get("s2FieldsOfStudy") else "cs.LG"
-                    
+
                     ref_query = """
                     MERGE (ref:Paper {arxiv_id: $ref_arxiv_id})
                     ON CREATE SET ref.title = $ref_title, ref.primary_field = $ref_field
@@ -212,20 +214,20 @@ def ingest_daily_papers(db: Session, limit: int = 20):
     """Runs the daily pipeline: fetch, enrich, embed, store."""
     logger.info("Starting Daily Ingestion Pipeline...")
     raw_papers = fetch_arxiv_papers(limit=limit)
-    
+
     ingested_count = 0
     for p_data in raw_papers:
         arxiv_id = p_data["arxiv_id"]
-        
+
         # Check if already exists in SQL database
         existing = db.query(Paper).filter(Paper.arxiv_id == arxiv_id).first()
         if existing:
             logger.info(f"Paper {arxiv_id} already exists in DB. Skipping.")
             continue
-            
+
         # Enrich with Semantic Scholar metrics
         s2_data = enrich_with_semantic_scholar(arxiv_id)
-        
+
         # Build Paper Object
         paper = Paper(
             arxiv_id=arxiv_id,
@@ -239,10 +241,10 @@ def ingest_daily_papers(db: Session, limit: int = 20):
             citation_count=s2_data.get("citationCount", 0),
             reference_count=s2_data.get("referenceCount", 0)
         )
-        
+
         db.add(paper)
         db.flush()  # gets id
-        
+
         # Embed abstract and store vector
         embedding = get_embedding(p_data["summary"])
         paper_emb = PaperEmbedding(
@@ -251,12 +253,12 @@ def ingest_daily_papers(db: Session, limit: int = 20):
         )
         db.add(paper_emb)
         db.commit()
-        
+
         # Update Neo4j citation graph
         update_neo4j_citation_graph(p_data, s2_data)
-        
+
         ingested_count += 1
         logger.info(f"Ingested & indexed paper: {p_data['title']} (arxiv:{arxiv_id})")
-        
+
     logger.info(f"Daily Ingestion Pipeline finished. Ingested {ingested_count} new papers.")
     return ingested_count

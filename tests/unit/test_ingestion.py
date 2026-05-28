@@ -1,9 +1,11 @@
 import datetime
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from signalzero.services.database import Base
+
 from signalzero.models.models import Paper, PaperEmbedding
+from signalzero.services.database import Base
 from signalzero.services.ingestion import get_embedding
 
 # Setup a test SQLite database
@@ -36,7 +38,7 @@ def test_paper_model_creation(db_session):
     )
     db_session.add(paper)
     db_session.commit()
-    
+
     retrieved = db_session.query(Paper).filter(Paper.arxiv_id == "1706.03762").first()
     assert retrieved is not None
     assert retrieved.title == "Attention Is All You Need"
@@ -57,7 +59,7 @@ def test_paper_embedding_relation(db_session):
     )
     db_session.add(paper)
     db_session.flush()
-    
+
     embedding_vec = get_embedding(paper.summary)
     embedding_entry = PaperEmbedding(
         paper_id=paper.arxiv_id,
@@ -65,7 +67,7 @@ def test_paper_embedding_relation(db_session):
     )
     db_session.add(embedding_entry)
     db_session.commit()
-    
+
     retrieved = db_session.query(Paper).filter(Paper.arxiv_id == "2006.11239").first()
     assert retrieved.embedding_relation is not None
     assert len(retrieved.embedding_relation.embedding) == 384

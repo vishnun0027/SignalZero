@@ -1,18 +1,20 @@
 import json
 import logging
+
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from signalzero.utils.config import settings
-from signalzero.services.database import get_db, init_postgres, get_neo4j
-from signalzero.models.models import Signal, Paper
-from signalzero.services.ingestion import ingest_daily_papers
-from signalzero.core.detectors.cross_field import run_cross_field_detector
-from signalzero.core.detectors.vocab_drift import run_vocab_emergence_detector
-from signalzero.core.detectors.convergent import run_convergent_discovery_detector
-from signalzero.core.detectors.hackernews import run_hn_detector
+
 from signalzero.core.agent.graph import analyze_signal_with_agent
+from signalzero.core.detectors.convergent import run_convergent_discovery_detector
+from signalzero.core.detectors.cross_field import run_cross_field_detector
+from signalzero.core.detectors.hackernews import run_hn_detector
+from signalzero.core.detectors.vocab_drift import run_vocab_emergence_detector
+from signalzero.models.models import Paper, Signal
+from signalzero.services.database import get_db, get_neo4j, init_postgres
+from signalzero.services.ingestion import ingest_daily_papers
+from signalzero.utils.config import settings
 
 # Initialize logging and database tables
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +22,8 @@ logger = logging.getLogger("SignalZero.API")
 
 # Create database tables if they do not exist
 init_postgres()
-from signalzero.services.database import engine, Base  # noqa: E402
+from signalzero.services.database import Base, engine  # noqa: E402
+
 try:
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
@@ -75,10 +78,10 @@ def get_signals(
         query = query.filter(Signal.status == status)
     if type:
         query = query.filter(Signal.type == type)
-    
+
     query = query.order_by(Signal.created_at.desc())
     signals = query.all()
-    
+
     # Parse trigger_details JSON for ease of consumption by frontend
     result = []
     for s in signals:
@@ -86,7 +89,7 @@ def get_signals(
             details = json.loads(str(s.trigger_details))
         except Exception:
             details = s.trigger_details
-            
+
         result.append({
             "id": s.id,
             "type": s.type,
@@ -105,12 +108,12 @@ def get_signal_detail(signal_id: int, db: Session = Depends(get_db)):
     signal = db.query(Signal).filter(Signal.id == signal_id).first()
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found.")
-        
+
     try:
         details = json.loads(str(signal.trigger_details))
     except Exception:
         details = signal.trigger_details
-        
+
     return {
         "id": signal.id,
         "type": signal.type,
@@ -128,7 +131,7 @@ def get_citation_graph(arxiv_id: str):
     driver = get_neo4j()
     if driver is None:
         raise HTTPException(status_code=503, detail="Neo4j graph database offline.")
-        
+
     # Query to fetch immediate citing and cited papers (up to 2 steps)
     query = """
     MATCH (p:Paper {arxiv_id: $arxiv_id})
@@ -138,26 +141,26 @@ def get_citation_graph(arxiv_id: str):
            collect(DISTINCT {arxiv_id: citing.arxiv_id, title: citing.title, field: citing.primary_field, type: 'citing'}) AS citing_list,
            collect(DISTINCT {arxiv_id: cited.arxiv_id, title: cited.title, field: cited.primary_field, type: 'cited'}) AS cited_list
     """
-    
+
     nodes = []
     links = []
     seen_nodes = set()
-    
+
     try:
         records, _, _ = driver.execute_query(query, {"arxiv_id": arxiv_id})
         if not records:
             return {"nodes": [], "links": []}
-            
+
         record = records[0]
         center_id = record.get("center_id")
         center_title = record.get("center_title") or "Selected Paper"
         center_field = record.get("center_field") or "cs.LG"
-        
+
         # Add center node
         if center_id:
             nodes.append({"id": center_id, "label": center_title, "group": center_field, "val": 15})
             seen_nodes.add(center_id)
-            
+
             # Process citing papers
             for item in record.get("citing_list", []):
                 cid = item.get("arxiv_id")
@@ -166,7 +169,7 @@ def get_citation_graph(arxiv_id: str):
                     seen_nodes.add(cid)
                 if cid:
                     links.append({"source": cid, "target": center_id, "type": "CITES"})
-                    
+
             # Process cited papers
             for item in record.get("cited_list", []):
                 cid = item.get("arxiv_id")
@@ -175,7 +178,7 @@ def get_citation_graph(arxiv_id: str):
                     seen_nodes.add(cid)
                 if cid:
                     links.append({"source": center_id, "target": cid, "type": "CITES"})
-                    
+
     except Exception as e:
         logger.error(f"Error querying Neo4j for graph visualization: {e}")
         # Build local mock response if in InMemoryNeo4j mode
@@ -191,7 +194,7 @@ def get_citation_graph(arxiv_id: str):
                 {"source": "citing_2", "target": arxiv_id, "type": "CITES"},
                 {"source": arxiv_id, "target": "cited_1", "type": "CITES"}
             ]
-            
+
     return {"nodes": nodes, "links": links}
 
 @app.get("/api/stats")
@@ -202,12 +205,12 @@ def get_stats(db: Session = Depends(get_db)):
     emerging = db.query(Signal).filter(Signal.status == "emerging").count()
     growing = db.query(Signal).filter(Signal.status == "growing").count()
     fp = db.query(Signal).filter(Signal.status == "false_positive").count()
-    
+
     # Fetch counts by detector type
     cross_field_count = db.query(Signal).filter(Signal.type == "cross_field").count()
     vocab_drift_count = db.query(Signal).filter(Signal.type == "vocab_drift").count()
     convergent_count = db.query(Signal).filter(Signal.type == "convergent").count()
-    
+
     return {
         "total_papers": total_papers,
         "total_signals": total_signals,
@@ -231,11 +234,11 @@ def run_detection_pipeline_sync(db: Session):
     run_vocab_emergence_detector(db)
     run_convergent_discovery_detector(db)
     run_hn_detector(db)
-    
+
     # 2. Query all unanalyzed signals in database (brief is null) and run LangGraph agent
     unanalyzed = db.query(Signal).filter(Signal.brief.is_(None)).all()
     logger.info(f"Found {len(unanalyzed)} unanalyzed signals. Running LangGraph research agent...")
-    
+
     for s in unanalyzed:
         analyze_signal_with_agent(db, int(s.id))
 

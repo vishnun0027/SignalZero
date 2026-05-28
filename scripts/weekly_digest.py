@@ -1,4 +1,5 @@
 import logging
+
 from signalzero.services.database import get_db, init_postgres
 from signalzero.services.notifications import compile_and_send_weekly_digest
 

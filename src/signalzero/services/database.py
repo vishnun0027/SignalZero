@@ -1,6 +1,8 @@
 import logging
+
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, declarative_base, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 from signalzero.utils.config import settings
 
 logger = logging.getLogger("SignalZero.Database")
@@ -15,12 +17,12 @@ SessionLocal = None
 def init_postgres():
     global engine, SessionLocal
     db_url = settings.DATABASE_URL
-    
+
     # Enable pgvector if postgres is used, else fallback gracefully
     connect_args = {}
     if db_url.startswith("sqlite"):
         connect_args = {"check_same_thread": False}
-        
+
     try:
         engine = create_engine(db_url, connect_args=connect_args)
         # Test connection
@@ -100,7 +102,7 @@ def get_neo4j():
         # Check if user has updated default credentials
         if settings.NEO4J_PASSWORD == "neo4j_password" and "localhost" in settings.NEO4J_URI:
             logger.warning("Using default Neo4j credentials on localhost. Attempting local connection.")
-            
+
         neo4j_driver = GraphDatabase.driver(
             settings.NEO4J_URI,
             auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD)
@@ -111,7 +113,7 @@ def get_neo4j():
     except Exception as e:
         logger.error(f"Failed to connect to Neo4j: {e}. Falling back to InMemoryNeo4j.")
         neo4j_driver = InMemoryNeo4j()
-        
+
     return neo4j_driver
 
 

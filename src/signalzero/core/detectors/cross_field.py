@@ -1,9 +1,11 @@
+import datetime
 import json
 import logging
-import datetime
+
 from sqlalchemy.orm import Session
-from signalzero.services.database import get_neo4j
+
 from signalzero.models.models import Signal
+from signalzero.services.database import get_neo4j
 
 logger = logging.getLogger("SignalZero.Detector.CrossField")
 
@@ -15,9 +17,9 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
     if driver is None:
         logger.warning("Neo4j driver is offline. Skipping Cross-Field detector.")
         return []
-        
+
     logger.info("Running Cross-Field Citation Anomaly Detector...")
-    
+
     # Query: find papers cited by citing papers. In our schema: (citing)-[:CITES]->(p)
     # Filter to papers published in the last 180 days (relaxed from 90 to handle sparse dev feeds)
     query = """
@@ -30,7 +32,7 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
     ORDER BY field_spread DESC, total_citations DESC
     LIMIT $limit
     """
-    
+
     results = []
     try:
         records, _, _ = driver.execute_query(query, {"limit": limit})
@@ -42,11 +44,11 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
             citing_fields = record.get("citing_fields") or []
             field_spread = record.get("field_spread") or len(citing_fields)
             total_citations = record.get("total_citations") or 0
-            
+
             # Compute confidence score: based on field spread (3 -> 0.6, 4 -> 0.8, 5+ -> 0.95)
             # and scaled citation velocity if publication date is known
             confidence = min(0.99, (field_spread / 5.0) * 0.8 + min(0.2, total_citations / 50.0))
-            
+
             trigger_details = {
                 "arxiv_id": arxiv_id,
                 "title": title,
@@ -55,14 +57,14 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
                 "total_citations": total_citations,
                 "published_date": pub_date_str
             }
-            
+
             results.append({
                 "type": "cross_field",
                 "arxiv_id": arxiv_id,
                 "confidence": confidence,
                 "trigger_details": trigger_details
             })
-            
+
             # Persist to SQL DB (if not already logged for this paper in last 30 days)
             cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=30)
             existing_signal = db.query(Signal).filter(
@@ -70,7 +72,7 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
                 Signal.trigger_details.like(f'%"{arxiv_id}"%'),
                 Signal.created_at >= cutoff
             ).first()
-            
+
             if not existing_signal:
                 signal = Signal(
                     type="cross_field",
@@ -81,8 +83,8 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
                 db.add(signal)
                 db.commit()
                 logger.info(f"Logged new cross-field citation signal for: '{title}' (arxiv:{arxiv_id})")
-                
+
     except Exception as e:
         logger.error(f"Error running Cross-Field detector: {e}")
-        
+
     return results
