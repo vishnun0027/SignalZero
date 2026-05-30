@@ -1,182 +1,27 @@
-# SignalZero: Weak Signal Intelligence for Emerging Technologies
+# SignalZero
 
-SignalZero is a headless, domain-focused technology forecasting system that detects **emerging AI/ML breakthroughs 3–6 months before they enter mainstream discourse**. By monitoring daily arXiv preprint feeds, Semantic Scholar citation graphs, and technical neologisms, SignalZero algorithmically extracts early indicators of paradigm shifts and generates structured "Why This Matters" briefings using a LangGraph research agent.
+*Weak Signal Intelligence for Emerging Technologies*
 
-The system is designed for **headless operation**, delivering real-time alerts and weekly digests directly to Slack and Discord.
+## The Vision
 
----
+SignalZero is built on a single, powerful premise: **to detect emerging technologies 3–6 months before they enter mainstream discourse.** 
 
-## System Architecture
+We are building a "scientific telescope" pointed at the frontier of human knowledge, designed to detect faint light from ideas that have not yet arrived. SignalZero monitors what has *not yet trended* — sparse, early-stage signals that historically precede major breakthroughs.
 
-```
-[arXiv API] + [Semantic Scholar API]
-                 │
-                 ▼
-     [Daily Ingestion Pipeline]
-                 │
-        ┌────────┴────────┐
-        ▼                 ▼
-   [PostgreSQL]       [Neo4j Graph]
-   (pgvector metadata) (citation lineage)
-        │                 │
-        └────────┬────────┘
-                 ▼
-     [Signal Detection Engine]
-     ├── Cross-Field Citation Monitor
-     ├── Vocabulary Emergence Detector
-     └── Convergent Discovery Clusterer
-                 │
-                 ▼
-    [LangGraph Research Agent] (Groq Llama-3.3)
-                 │
-                 ▼
-         [Digest Engine]
-                 │
-        ┌────────┴────────┐
-        ▼                 ▼
-  [Discord Embed]    [Slack mrkdwn]
-```
+## The Objective
 
----
+Every organization that builds on emerging technology faces the same problem: by the time a breakthrough is visible on mainstream channels (news, tech blogs, social media), it is already 12–18 months old. The decision window — when early adopters gain a structural advantage — has already closed.
 
-## Key Features
+Current tools like search trends or news aggregators only measure what is already known. SignalZero aims to close this intelligence gap. By automatically monitoring scientific literature and technical communities, it algorithmically extracts early indicators of paradigm shifts and generates structured executive briefings. 
 
-1. **Daily Ingestion Pipeline:** Automatic daily ingestion of new preprints in `cs.AI`, `cs.LG`, and `cs.CL`.
-2. **Tri-Detector System:**
-   * **Cross-Field Citation Monitor:** Detects papers cited across $\ge 3$ distinct arXiv domains via Neo4j Cypher queries.
-   * **Vocabulary Emergence Detector:** Monitors term-frequency spikes in abstracts using n-grams and ADWIN drift detection.
-   * **Convergent Discovery Clusterer:** Identifies semantic clusters of $\ge 3$ independent research groups working on similar novel concepts using SPECTER/MiniLM embeddings.
-3. **LangGraph Research Agent:** Runs a validation loop that retrieves semantic context, scores confidence, and generates executive-level briefs ("Why This Matters") using Groq/OpenAI.
-4. **Headless Alerts & Digests:** Direct Slack and Discord webhooks for instant alerts and aggregated weekly digests.
-5. **REST API Interface:** FastAPI endpoints for health checks, signal history, graph lineages, and manual pipeline triggers.
+## How It Works: The "Weak Signal" Phenomenon
 
----
+A weak signal is an early, faint, and ambiguous indicator of a future development. SignalZero looks for three specific patterns that historically precede major technological breakthroughs:
 
-## Directory Structure
+1. **Cross-Field Anomaly:** When an idea originates in one specific field but is quickly adopted by researchers in entirely different domains. This indicates a general-purpose mechanism solving broad problems.
+2. **Vocabulary Emergence:** When a completely new technical term appears with near-zero frequency, then accelerates in usage over a short period.
+3. **Convergent Discovery:** When multiple independent research groups publish work on the exact same novel concept simultaneously, indicating the idea has reached its natural threshold of discovery.
 
-* [main.py](file:///home/vishnu/worklab/SignalZero/main.py) — Daily pipeline orchestration entry point.
-* [weekly_digest.py](file:///home/vishnu/worklab/SignalZero/weekly_digest.py) — Compiles and sends the weekly summary report.
-* [run_backtest.py](file:///home/vishnu/worklab/SignalZero/run_backtest.py) — Seeds historical data and measures detector metrics.
-* [verify_connections.py](file:///home/vishnu/worklab/SignalZero/verify_connections.py) — Validates database and external API integrations.
-* `src/` — Package source files:
-  * [src/config.py](file:///home/vishnu/worklab/SignalZero/src/config.py) — Pydantic app configuration.
-  * [src/database.py](file:///home/vishnu/worklab/SignalZero/src/database.py) — Postgres, Redis, and Neo4j connections.
-  * [src/models.py](file:///home/vishnu/worklab/SignalZero/src/models.py) — SQLAlchemy database tables.
-  * [src/ingestion.py](file:///home/vishnu/worklab/SignalZero/src/ingestion.py) — arXiv and Semantic Scholar fetches.
-  * `src/detectors/` — Algorithmic weak signal monitors ([cross_field.py](file:///home/vishnu/worklab/SignalZero/src/detectors/cross_field.py), [vocab_drift.py](file:///home/vishnu/worklab/SignalZero/src/detectors/vocab_drift.py), [convergent.py](file:///home/vishnu/worklab/SignalZero/src/detectors/convergent.py)).
-  * `src/agent/` — LangGraph briefing agent ([graph.py](file:///home/vishnu/worklab/SignalZero/src/agent/graph.py), [llm.py](file:///home/vishnu/worklab/SignalZero/src/agent/llm.py)).
-  * [src/notifications.py](file:///home/vishnu/worklab/SignalZero/src/notifications.py) — Webhook dispatch formatting.
-  * [src/api/main.py](file:///home/vishnu/worklab/SignalZero/src/api/main.py) — FastAPI REST endpoint router.
-* `tests/` — Automated test suites.
+## Why This Matters
 
----
-
-## Configuration & Environment Variables
-
-Copy the example configuration to initialize your environment:
-```bash
-cp .env.example .env
-```
-
-Configure your credentials in `.env`:
-```ini
-# Application Mode
-ENV=development
-HOST=127.0.0.1
-PORT=8007
-
-# 1. Supabase/PostgreSQL (with pgvector support)
-DATABASE_URL=postgresql://[user]:[password]@[host]:5432/postgres
-
-# 2. Graph Database (Neo4j AuraDB or local)
-NEO4J_URI=neo4j+s://[your-aura-id].databases.neo4j.io
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=your-neo4j-password
-
-# 3. Cache & Time Series (Upstash Redis or local)
-REDIS_URL=redis://localhost:6379
-
-# 4. LLM API Keys (Groq / OpenAI)
-GROQ_API_KEY=gsk_xxx
-OPENAI_API_KEY=sk-proj-xxx
-
-# 5. Headless Webhooks
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-```
-
-To verify database and API configurations, run the connection tool:
-```bash
-uv run python verify_connections.py
-```
-
----
-
-## Usage Instructions
-
-### 1. Running the Pipeline
-Trigger a manual daily ingestion, detection, and analysis workflow run:
-```bash
-uv run python main.py
-```
-
-### 2. Launching the REST API
-Start the FastAPI local web server:
-```bash
-uv run python src/api/main.py
-```
-Interactive API docs will be available at `http://127.0.0.1:8007/docs`.
-
-### 3. Compiling the Weekly Digest
-Trigger the compilation of top signals and send the summary digest report to Slack and Discord:
-```bash
-uv run python weekly_digest.py
-```
-
----
-
-## Production Deployment (Headless)
-
-SignalZero can be configured to run continuously in headless environments using `systemd` timers.
-
-1. **Deploy Service Units:**
-   Copy the unit files to the user's systemd directory `~/.config/systemd/user/`:
-   ```bash
-   mkdir -p ~/.config/systemd/user/
-   cp signalzero.service ~/.config/systemd/user/
-   cp signalzero.timer ~/.config/systemd/user/
-   cp signalzero_api.service ~/.config/systemd/user/
-   cp signalzero_digest.service ~/.config/systemd/user/
-   cp signalzero_digest.timer ~/.config/systemd/user/
-   ```
-
-2. **Reload and Enable Services:**
-   ```bash
-   systemctl --user daemon-reload
-   systemctl --user enable --now signalzero_api.service signalzero.timer signalzero_digest.timer
-   ```
-
-3. **Check Logs:**
-   ```bash
-   journalctl --user -u signalzero_api.service -n 50 --no-pager
-   journalctl --user -u signalzero.service -n 50 --no-pager
-   ```
-
----
-
-## Testing & Verification
-
-### Run Unit Tests
-```bash
-uv run pytest
-```
-
-### Run Historical Backtest Simulation
-SignalZero contains a validation tool that seeds an isolated database with historical breakthrough data (such as Transformers, BERT, and LoRA), mocks citation spreads, and measures detector accuracy metrics:
-```bash
-uv run python run_backtest.py
-```
-This script computes and formats detector performance:
-* **Precision:** Goal is $\ge 40.0\%$.
-* **Recall:** Goal is $\ge 70.0\%$ (capturing known breakthroughs).
-* **Estimated Lead Time:** Displays detection offset before concept peaks.
+SignalZero is not a productivity tool or a chat interface. It is a scientific instrument designed to find the next big thing while it is still just a handful of papers and a new idea. The most important outcome is gaining a deep understanding of how scientific knowledge propagates, how ideas cross boundaries, and how breakthroughs look in their earliest, most fragile moments — before the world even has words for them.
