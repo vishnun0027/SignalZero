@@ -41,6 +41,25 @@ class Settings(BaseSettings):
     # Security: JWT Secret
     JWT_SECRET_KEY: str = ""
 
+    # ArXiv Ingestion Query Settings
+    ARXIV_QUERY: str = (
+        "cat:cs.AI OR cat:cs.LG OR cat:cs.CL OR cat:cs.CV OR "
+        "cat:cs.NE OR cat:cs.MA OR cat:cs.RO OR cat:cs.CR OR cat:cs.CY"
+    )
+
+    # Detector Threshold Settings
+    CROSS_FIELD_MIN_FIELDS: int = 3
+    VOCAB_DRIFT_MIN_COUNT: int = 2
+    CONVERGENT_MIN_CLUSTER_SIZE: int = 3
+    CONVERGENT_LOOKBACK_DAYS: int = 90
+    CONVERGENT_SIMILARITY_THRESHOLD: float = 0.78
+
+    # Agent Settings
+    MAX_AGENT_ANALYSIS_PER_RUN: int = 5
+
+    # Data Retention Settings
+    DATA_RETENTION_DAYS: int = 365
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

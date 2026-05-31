@@ -353,7 +353,7 @@ def compile_and_send_weekly_digest(db) -> bool:
     from signalzero.models.models import Signal
 
     # Fetch signals from the last 7 days with high/medium confidence
-    cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+    cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=7)
     signals = db.query(Signal).filter(
         Signal.created_at >= cutoff,
         Signal.status.in_(["emerging", "growing"])

@@ -117,7 +117,7 @@ def run_hn_detector(db: Session = Depends(get_db), lookback_days: int = 14) -> l
                 })
 
                 # Prevent duplicate signals in the last 14 days
-                cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=14)
+                cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=14)
                 existing_signal = db.query(Signal).filter(
                     Signal.type == "hn_community",
                     Signal.trigger_details.like(f'%"{arxiv_id}"%'),

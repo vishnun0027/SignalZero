@@ -107,10 +107,11 @@ def run_vocab_emergence_detector(db: Session, lookback_days: int = 14) -> list[d
     abstracts = [str(p.summary) for p in recent_papers]
     ngrams = extract_ngrams(abstracts, n_values=[1, 2, 3])
 
+    from signalzero.utils.config import settings
+
     # Filter for technical neologisms: term must appear multiple times to be a candidate
-    # NOTE: Threshold is 2 for early phase (small dataset). Raise to 5+ once 1000+ papers are ingested.
-    candidates = {term: count for term, count in ngrams.items() if count >= 2}
-    logger.info(f"Extracted {len(candidates)} candidate technical neologisms.")
+    candidates = {term: count for term, count in ngrams.items() if count >= settings.VOCAB_DRIFT_MIN_COUNT}
+    logger.info(f"Extracted {len(candidates)} candidate technical neologisms (threshold: {settings.VOCAB_DRIFT_MIN_COUNT}).")
 
     results = []
     today_str = str(datetime.date.today())
@@ -183,7 +184,7 @@ def run_vocab_emergence_detector(db: Session, lookback_days: int = 14) -> list[d
                 })
 
                 # Prevent duplicate signals for the same term in the last 7 days
-                cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+                cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=7)
                 existing_signal = db.query(Signal).filter(
                     Signal.type == "vocab_drift",
                     Signal.trigger_details.like(f'%"{term}"%'),

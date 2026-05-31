@@ -10,7 +10,7 @@ from signalzero.services.database import get_neo4j
 logger = logging.getLogger("SignalZero.Detector.CrossField")
 
 def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
-    """Runs Neo4j Cypher query to identify papers cited across >= 3 distinct subfields.
+    """Runs Neo4j Cypher query to identify papers cited across configurable distinct subfields.
     Computes field spread score and citation velocity, and logs alerts to Signal store.
     """
     driver = get_neo4j()
@@ -20,13 +20,15 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
 
     logger.info("Running Cross-Field Citation Anomaly Detector...")
 
+    from signalzero.utils.config import settings
+
     # Query: find papers cited by citing papers. In our schema: (citing)-[:CITES]->(p)
     # Filter to papers published in the last 180 days (relaxed from 90 to handle sparse dev feeds)
     query = """
     MATCH (citing:Paper)-[:CITES]->(p:Paper)
     WHERE p.published_date IS NOT NULL
     WITH p, collect(DISTINCT citing.primary_field) AS citing_fields, count(citing) AS total_citations
-    WHERE size(citing_fields) >= 3
+    WHERE size(citing_fields) >= $min_fields
     RETURN p.title AS title, p.arxiv_id AS arxiv_id, p.published_date AS published_date,
            citing_fields, size(citing_fields) AS field_spread, total_citations
     ORDER BY field_spread DESC, total_citations DESC
@@ -35,7 +37,10 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
 
     results = []
     try:
-        records, _, _ = driver.execute_query(query, {"limit": limit})
+        records, _, _ = driver.execute_query(query, {
+            "limit": limit,
+            "min_fields": settings.CROSS_FIELD_MIN_FIELDS
+        })
         for record in records:
             # Handle record parsing depending on return format
             title = record.get("title") or record.get("p.title")
@@ -66,7 +71,7 @@ def run_cross_field_detector(db: Session, limit: int = 10) -> list[dict]:
             })
 
             # Persist to SQL DB (if not already logged for this paper in last 30 days)
-            cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+            cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=30)
             existing_signal = db.query(Signal).filter(
                 Signal.type == "cross_field",
                 Signal.trigger_details.like(f'%"{arxiv_id}"%'),

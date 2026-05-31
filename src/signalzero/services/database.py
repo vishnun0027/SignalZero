@@ -166,3 +166,51 @@ def get_redis():
         redis_client = InMemoryRedis()
 
     return redis_client
+
+
+def prune_historical_data(db_session, retention_days: int) -> int:
+    """Prunes papers and Neo4j nodes published older than retention_days.
+    Returns the number of SQL papers pruned.
+    """
+    import datetime
+    cutoff_date = datetime.date.today() - datetime.timedelta(days=retention_days)
+    logger.info(f"Starting historical data pruning (retention: {retention_days} days, cutoff: {cutoff_date})...")
+
+    # 1. Prune Neo4j citation graph nodes
+    try:
+        driver = get_neo4j()
+        if driver is not None:
+            cutoff_date_str = str(cutoff_date)
+            # Cypher query: detach and delete old papers
+            neo4j_query = """
+            MATCH (p:Paper)
+            WHERE p.published_date IS NOT NULL AND p.published_date < $cutoff_date
+            DETACH DELETE p
+            """
+            driver.execute_query(neo4j_query, {"cutoff_date": cutoff_date_str})
+            logger.info("Successfully pruned old nodes from Neo4j citation graph.")
+    except Exception as e:
+        logger.error(f"Error pruning Neo4j citation graph: {e}")
+
+    # 2. Prune Relational SQL database (Papers & Embeddings)
+    # Since PaperEmbedding table has ON DELETE CASCADE on paper_id (pointing to papers.arxiv_id),
+    # deleting the Paper row will cascade delete the PaperEmbedding row.
+    pruned_count = 0
+    try:
+        from signalzero.models.models import Paper
+
+        # Query papers to delete
+        papers_to_prune = db_session.query(Paper).filter(Paper.published_date < cutoff_date).all()
+        pruned_count = len(papers_to_prune)
+        if pruned_count > 0:
+            for paper in papers_to_prune:
+                db_session.delete(paper)
+            db_session.commit()
+            logger.info(f"Successfully pruned {pruned_count} historical papers and their embeddings from SQL database.")
+        else:
+            logger.info("No SQL papers found older than cutoff date. Nothing to prune.")
+    except Exception as e:
+        db_session.rollback()
+        logger.error(f"Error pruning SQL database papers: {e}")
+
+    return pruned_count

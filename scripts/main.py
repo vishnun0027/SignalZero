@@ -8,6 +8,7 @@ from signalzero.core.detectors.vocab_drift import run_vocab_emergence_detector
 from signalzero.models.models import Signal
 from signalzero.services.database import get_db, init_postgres
 from signalzero.services.ingestion import ingest_daily_papers
+from signalzero.utils.config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("SignalZero.Main")
@@ -37,12 +38,16 @@ def run_pipeline():
 
         logger.info("--- Step 3: Triggering AI Agent on Emerging Signals ---")
         # Fetch signals that need analysis (status='emerging' but no brief generated yet)
-        unprocessed_signals = db.query(Signal).filter(Signal.status == "emerging", Signal.brief.is_(None)).all()
+        # Order by confidence desc and cap at settings.MAX_AGENT_ANALYSIS_PER_RUN
+        unprocessed_signals = db.query(Signal).filter(
+            Signal.status == "emerging",
+            Signal.brief.is_(None)
+        ).order_by(Signal.confidence.desc()).limit(settings.MAX_AGENT_ANALYSIS_PER_RUN).all()
 
         if not unprocessed_signals:
             logger.info("No new emerging signals require agent analysis.")
         else:
-            logger.info(f"Found {len(unprocessed_signals)} signals requiring analysis.")
+            logger.info(f"Found {len(unprocessed_signals)} emerging signals to analyze (capped at {settings.MAX_AGENT_ANALYSIS_PER_RUN}).")
             for signal in unprocessed_signals:
                 try:
                     analyze_signal_with_agent(db, signal.id)

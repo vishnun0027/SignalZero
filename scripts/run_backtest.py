@@ -134,6 +134,15 @@ def run_backtest():
 
     # 2. Inject backtest mocks
     from signalzero.services import database
+    from signalzero.utils.config import settings
+
+    # Force standard baseline parameters for historical simulation accuracy
+    settings.CROSS_FIELD_MIN_FIELDS = 3
+    settings.VOCAB_DRIFT_MIN_COUNT = 2
+    settings.CONVERGENT_MIN_CLUSTER_SIZE = 3
+    settings.CONVERGENT_LOOKBACK_DAYS = 90
+    settings.CONVERGENT_SIMILARITY_THRESHOLD = 0.78
+
     database.neo4j_driver = BacktestNeo4j()
     database.redis_client = BacktestRedis()
 

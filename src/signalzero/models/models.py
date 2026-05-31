@@ -34,7 +34,7 @@ class Paper(Base):
     semantic_scholar_id = Column(String(100), nullable=True)
     citation_count = Column(Integer, default=0)
     reference_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
 
     # Relationships
     embedding_relation = relationship("PaperEmbedding", back_populates="paper", uselist=False, cascade="all, delete-orphan")
@@ -58,5 +58,5 @@ class Signal(Base):
     trigger_details = Column(Text, nullable=False)  # JSON string detailing the specific metrics triggering this
     brief = Column(Text, nullable=True)  # LLM-generated brief
     status = Column(String(50), index=True, default="emerging")  # 'emerging', 'growing', 'mainstream', 'false_positive'
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC), onupdate=lambda: datetime.datetime.now(datetime.UTC))

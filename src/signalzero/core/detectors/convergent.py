@@ -38,11 +38,21 @@ def check_author_independence(papers: list[Paper]) -> bool:
                 return False
     return True
 
-def run_convergent_discovery_detector(db: Session, lookback_days: int = 90, similarity_threshold: float = 0.78) -> list[dict]:
+
+def run_convergent_discovery_detector(db: Session, lookback_days: int | None = None, similarity_threshold: float | None = None) -> list[dict]:
     """Retrieves recent paper embeddings, clusters them by cosine similarity,
     verifies authorship independence, checks for concept novelty, and saves signals.
     """
-    logger.info("Running Convergent Discovery Detector...")
+    from signalzero.utils.config import settings
+
+    if lookback_days is None:
+        lookback_days = settings.CONVERGENT_LOOKBACK_DAYS
+    if similarity_threshold is None:
+        similarity_threshold = settings.CONVERGENT_SIMILARITY_THRESHOLD
+
+    min_cluster_size = settings.CONVERGENT_MIN_CLUSTER_SIZE
+
+    logger.info(f"Running Convergent Discovery Detector (lookback: {lookback_days} days, sim_threshold: {similarity_threshold})...")
 
     # 1. Fetch recent papers and their embeddings
     cutoff_date = datetime.date.today() - datetime.timedelta(days=lookback_days)
@@ -50,8 +60,8 @@ def run_convergent_discovery_detector(db: Session, lookback_days: int = 90, simi
         PaperEmbedding, Paper.arxiv_id == PaperEmbedding.paper_id
     ).filter(Paper.published_date >= cutoff_date).all()
 
-    if len(recent_entries) < 3:
-        logger.warning(f"Fewer than 3 recent papers found ({len(recent_entries)}). Skipping convergent detector.")
+    if len(recent_entries) < min_cluster_size:
+        logger.warning(f"Fewer than {min_cluster_size} recent papers found ({len(recent_entries)}). Skipping convergent detector.")
         return []
 
     logger.info(f"Loaded {len(recent_entries)} recent papers with embeddings for clustering.")
@@ -92,10 +102,10 @@ def run_convergent_discovery_detector(db: Session, lookback_days: int = 90, simi
         if i not in visited:
             cluster_indices: list[int] = []
             dfs(i, cluster_indices)
-            if len(cluster_indices) >= 3:  # Only capture clusters of size >= 3
+            if len(cluster_indices) >= min_cluster_size:  # Enforce configurable cluster size
                 clusters.append([papers[idx] for idx in cluster_indices])
 
-    logger.info(f"Found {len(clusters)} candidate semantic clusters of size >= 3.")
+    logger.info(f"Found {len(clusters)} candidate semantic clusters of size >= {min_cluster_size}.")
 
     results = []
     for cluster in clusters:
@@ -156,7 +166,7 @@ def run_convergent_discovery_detector(db: Session, lookback_days: int = 90, simi
         # Search by checking if any of the triggering papers are already in a convergent signal in last 30 days
         paper_ids = [p.arxiv_id for p in cluster]
         existing_signal = False
-        cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+        cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=30)
         for pid in paper_ids:
             check = db.query(Signal).filter(
                 Signal.type == "convergent",

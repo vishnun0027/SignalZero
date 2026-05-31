@@ -235,9 +235,12 @@ def run_detection_pipeline_sync(db: Session):
     run_convergent_discovery_detector(db)
     run_hn_detector(db)
 
-    # 2. Query all unanalyzed signals in database (brief is null) and run LangGraph agent
-    unanalyzed = db.query(Signal).filter(Signal.brief.is_(None)).all()
-    logger.info(f"Found {len(unanalyzed)} unanalyzed signals. Running LangGraph research agent...")
+    # 2. Query all unanalyzed signals in database (brief is null), sort by confidence desc, and cap at limit
+    unanalyzed = db.query(Signal).filter(
+        Signal.brief.is_(None)
+    ).order_by(Signal.confidence.desc()).limit(settings.MAX_AGENT_ANALYSIS_PER_RUN).all()
+
+    logger.info(f"Found {len(unanalyzed)} signals to analyze (capped at {settings.MAX_AGENT_ANALYSIS_PER_RUN}). Running LangGraph research agent...")
 
     for s in unanalyzed:
         analyze_signal_with_agent(db, int(s.id))

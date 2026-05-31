@@ -35,14 +35,16 @@ def get_embedding(text: str) -> list[float]:
     return [x/norm for x in vec]
 
 def fetch_arxiv_papers(limit: int = 50) -> list[dict]:
-    """Fetches recent AI/ML papers from arXiv REST API."""
+    """Fetches recent papers from arXiv REST API based on configured query."""
     import arxiv
-    logger.info(f"Querying arXiv for up to {limit} recent papers in cs.AI, cs.LG, cs.CL...")
+
+    from signalzero.utils.config import settings
+    logger.info(f"Querying arXiv for up to {limit} recent papers with query: {settings.ARXIV_QUERY}")
     # arXiv client v4.0.0+ is more sensitive to rate limits.
     # We increase delay_seconds and use a robust retry strategy.
     client = arxiv.Client(delay_seconds=5.0, num_retries=5)
     search = arxiv.Search(
-        query="cat:cs.AI OR cat:cs.LG OR cat:cs.CL",
+        query=settings.ARXIV_QUERY,
         max_results=limit,
         sort_by=arxiv.SortCriterion.SubmittedDate
     )
@@ -221,12 +223,18 @@ def ingest_daily_papers(db: Session, limit: int = 20):
 
         # Check if already exists in SQL database
         existing = db.query(Paper).filter(Paper.arxiv_id == arxiv_id).first()
-        if existing:
-            logger.info(f"Paper {arxiv_id} already exists in DB. Skipping.")
-            continue
-
+        
         # Enrich with Semantic Scholar metrics
         s2_data = enrich_with_semantic_scholar(arxiv_id)
+
+        if existing:
+            logger.info(f"Paper {arxiv_id} already exists. Updating metrics.")
+            existing.citation_count = s2_data.get("citation_count", existing.citation_count)
+            existing.reference_count = s2_data.get("reference_count", existing.reference_count)
+            db.commit()
+            # Update graph anyway to catch new citation links
+            update_neo4j_citation_graph(p_data, s2_data)
+            continue
 
         # Build Paper Object
         paper = Paper(
@@ -261,4 +269,13 @@ def ingest_daily_papers(db: Session, limit: int = 20):
         logger.info(f"Ingested & indexed paper: {p_data['title']} (arxiv:{arxiv_id})")
 
     logger.info(f"Daily Ingestion Pipeline finished. Ingested {ingested_count} new papers.")
+
+    # Execute data retention pruning
+    try:
+        from signalzero.services.database import prune_historical_data
+        from signalzero.utils.config import settings
+        prune_historical_data(db, settings.DATA_RETENTION_DAYS)
+    except Exception as prune_err:
+        logger.error(f"Error executing post-ingestion database pruning: {prune_err}")
+
     return ingested_count
