@@ -223,7 +223,7 @@ def ingest_daily_papers(db: Session, limit: int = 20):
 
         # Check if already exists in SQL database
         existing = db.query(Paper).filter(Paper.arxiv_id == arxiv_id).first()
-        
+
         # Enrich with Semantic Scholar metrics
         s2_data = enrich_with_semantic_scholar(arxiv_id)
 
