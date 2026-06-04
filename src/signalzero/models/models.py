@@ -34,6 +34,7 @@ class Paper(Base):
     semantic_scholar_id = Column(String(100), nullable=True)
     citation_count = Column(Integer, default=0)
     reference_count = Column(Integer, default=0)
+    influential_citation_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
 
     # Relationships
@@ -60,3 +61,16 @@ class Signal(Base):
     status = Column(String(50), index=True, default="emerging")  # 'emerging', 'growing', 'mainstream', 'false_positive'
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
     updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC), onupdate=lambda: datetime.datetime.now(datetime.UTC))
+
+class CrossFieldBaseline(Base):
+    """Stores rolling per-field baseline statistics for adaptive cross-field detection.
+    Updated after each ingestion run to track how cross-field citation rates evolve over time.
+    """
+    __tablename__ = "cross_field_baselines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    origin_field = Column(String(50), unique=True, index=True, nullable=False)  # e.g. "cs.CL"
+    avg_field_spread = Column(Float, default=1.0)   # rolling mean of field_spread for papers in this field
+    stddev_field_spread = Column(Float, default=0.5)  # rolling stddev for Z-score computation
+    paper_count = Column(Integer, default=0)          # number of papers in the sample
+    computed_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))

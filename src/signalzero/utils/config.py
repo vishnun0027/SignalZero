@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     CONVERGENT_LOOKBACK_DAYS: int = 90
     CONVERGENT_SIMILARITY_THRESHOLD: float = 0.78
 
+    # Cross-field detector v2: citation inflation robustness settings
+    CROSS_FIELD_INFLUENTIAL_WEIGHT: float = 3.0     # Weight multiplier for influential citations vs non-influential
+    CROSS_FIELD_METHODOLOGY_WEIGHT: float = 3.0     # Weight for methodology-intent citations
+    CROSS_FIELD_BACKGROUND_WEIGHT: float = 0.5      # Weight for background-intent citations
+    CROSS_FIELD_ZSCORE_THRESHOLD: float = 2.0       # Minimum Z-score vs. peers to flag as genuine anomaly
+    CROSS_FIELD_BASELINE_WINDOW_DAYS: int = 90      # Rolling window for adaptive baseline computation
+
     # Agent Settings
     MAX_AGENT_ANALYSIS_PER_RUN: int = 5
 

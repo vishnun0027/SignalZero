@@ -68,21 +68,65 @@ class InMemoryNeo4j:
 
     def execute_query(self, query: str, parameters: dict | None = None):
         logger.info(f"InMemoryNeo4j executing mock query: {query.strip().splitlines()[0]}...")
-        # Custom mock results for cross-field citation velocity
-        # If looking for emerging papers, return a sample list
+        # Cross-field detector v2 query mock
         if "CITES" in query or "citing:Paper" in query:
+            # Baseline computation query (returns aggregated per-field stats)
+            if "avg(field_spread)" in query or "stDev" in query:
+                return [
+                    {
+                        "origin_field": "cs.CL",
+                        "mean_spread": 2.0,
+                        "std_spread": 0.8,
+                        "paper_count": 50
+                    },
+                    {
+                        "origin_field": "cs.CV",
+                        "mean_spread": 1.8,
+                        "std_spread": 0.6,
+                        "paper_count": 40
+                    },
+                    {
+                        "origin_field": "cs.LG",
+                        "mean_spread": 2.2,
+                        "std_spread": 0.9,
+                        "paper_count": 60
+                    }
+                ], None, None
+
+            # Cross-field detector v2 query: includes influential metadata and contexts
             return [
                 {
-                    "p.title": "Attention Is All You Need",
-                    "p.arxiv_id": "1706.03762",
-                    "citing_fields": ["cs.CL", "cs.CV", "cs.SD", "q-bio"],
-                    "field_spread": 4
+                    "title": "Attention Is All You Need",
+                    "arxiv_id": "1706.03762",
+                    "published_date": "2017-06-12",
+                    "origin_field": "cs.CL",
+                    "all_citing_fields": ["cs.CL", "cs.CV", "cs.SD", "q-bio"],
+                    "influential_citing_fields": ["cs.CV", "q-bio"],
+                    "field_spread": 4,
+                    "influential_field_spread": 2,
+                    "total_citations": 35,
+                    "influential_count": 8,
+                    "citation_contexts": [
+                        "We adopt the transformer architecture from Vaswani et al.",
+                        "Following the approach of the attention mechanism proposed in this work",
+                        "Previous work on attention has shown improvements in NLP tasks"
+                    ]
                 },
                 {
-                    "p.title": "Denoising Diffusion Probabilistic Models",
-                    "p.arxiv_id": "2006.11239",
-                    "citing_fields": ["cs.LG", "cs.CV", "stat.ML"],
-                    "field_spread": 3
+                    "title": "Denoising Diffusion Probabilistic Models",
+                    "arxiv_id": "2006.11239",
+                    "published_date": "2020-06-19",
+                    "origin_field": "cs.LG",
+                    "all_citing_fields": ["cs.LG", "cs.CV", "stat.ML"],
+                    "influential_citing_fields": ["cs.CV"],
+                    "field_spread": 3,
+                    "influential_field_spread": 1,
+                    "total_citations": 12,
+                    "influential_count": 3,
+                    "citation_contexts": [
+                        "We use the diffusion framework for image generation",
+                        "Related work on generative models has demonstrated"
+                    ]
                 }
             ], None, None
         return [], None, None

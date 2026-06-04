@@ -105,7 +105,13 @@ def enrich_with_semantic_scholar(arxiv_id: str) -> dict:
         }
 
     url = f"https://api.semanticscholar.org/graph/v1/paper/arXiv:{arxiv_id}"
-    params = {"fields": "citationCount,referenceCount,citations,references,s2FieldsOfStudy,tldr"}
+    params = {
+        "fields": (
+            "citationCount,referenceCount,influentialCitationCount,"
+            "citations,citations.isInfluential,citations.contexts,citations.fieldsOfStudy,"
+            "references,s2FieldsOfStudy,tldr"
+        )
+    }
 
     # Check Redis cache first to avoid API limits
     redis_client = get_redis()
@@ -161,7 +167,9 @@ def enrich_with_semantic_scholar(arxiv_id: str) -> dict:
     }
 
 def update_neo4j_citation_graph(paper_data: dict, s2_data: dict):
-    """Inserts nodes and CITES relations in Neo4j citation graph."""
+    """Inserts nodes and CITES relations in Neo4j citation graph.
+    Stores is_influential and citation_context as edge properties for intent-aware scoring.
+    """
     driver = get_neo4j()
     if driver is None:
         return
@@ -209,6 +217,42 @@ def update_neo4j_citation_graph(paper_data: dict, s2_data: dict):
                         "ref_title": ref_title,
                         "ref_field": ref_field
                     })
+
+        # Add inbound citation edges with influence/context metadata
+        # These come from S2's citations field (papers that cite THIS paper)
+        citations = s2_data.get("citations", [])
+        if citations:
+            logger.info(f"Adding {len(citations)} inbound citation edges with influence metadata for paper {arxiv_id}")
+            for cit in citations:
+                cit_s2_id = cit.get("paperId")
+                if not cit_s2_id:
+                    continue
+
+                cit_title = cit.get("title", "Unknown")
+                is_influential = cit.get("isInfluential", False)
+                contexts = cit.get("contexts", [])
+                # Take first context snippet (truncated for storage efficiency)
+                context_snippet = contexts[0][:500] if contexts else ""
+                cit_fields = cit.get("fieldsOfStudy") or []
+                cit_primary_field = cit_fields[0] if cit_fields else "unknown"
+
+                cit_query = """
+                MERGE (citing:Paper {s2_id: $cit_s2_id})
+                ON CREATE SET citing.title = $cit_title, citing.primary_field = $cit_primary_field
+                WITH citing
+                MATCH (p:Paper {arxiv_id: $arxiv_id})
+                MERGE (citing)-[r:CITES]->(p)
+                SET r.is_influential = $is_influential,
+                    r.citation_context = $context_snippet
+                """
+                driver.execute_query(cit_query, {
+                    "arxiv_id": arxiv_id,
+                    "cit_s2_id": cit_s2_id,
+                    "cit_title": cit_title,
+                    "cit_primary_field": cit_primary_field,
+                    "is_influential": is_influential,
+                    "context_snippet": context_snippet
+                })
     except Exception as e:
         logger.error(f"Error updating Neo4j citation graph: {e}")
 
@@ -247,7 +291,8 @@ def ingest_daily_papers(db: Session, limit: int = 20):
             all_categories=p_data["all_categories"],
             semantic_scholar_id=s2_data.get("paperId"),
             citation_count=s2_data.get("citationCount", 0),
-            reference_count=s2_data.get("referenceCount", 0)
+            reference_count=s2_data.get("referenceCount", 0),
+            influential_citation_count=s2_data.get("influentialCitationCount", 0)
         )
 
         db.add(paper)
@@ -277,5 +322,12 @@ def ingest_daily_papers(db: Session, limit: int = 20):
         prune_historical_data(db, settings.DATA_RETENTION_DAYS)
     except Exception as prune_err:
         logger.error(f"Error executing post-ingestion database pruning: {prune_err}")
+
+    # Recompute cross-field baselines for adaptive thresholding
+    try:
+        from signalzero.core.detectors.baseline import compute_cross_field_baselines
+        compute_cross_field_baselines(db)
+    except Exception as baseline_err:
+        logger.error(f"Error computing cross-field baselines: {baseline_err}")
 
     return ingested_count
