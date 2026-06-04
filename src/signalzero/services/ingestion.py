@@ -91,18 +91,12 @@ def fetch_arxiv_papers(limit: int = 50) -> list[dict]:
     return results
 
 def enrich_with_semantic_scholar(arxiv_id: str) -> dict:
-    """Enriches paper with citation metrics and field information from Semantic Scholar."""
+    """Enriches paper with citation metrics and field information from Semantic Scholar.
+    Works with or without an API key — the public endpoint is rate-limited to 100 req/5min.
+    """
     s2_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
     if not s2_key:
-        logger.info(f"Skipping Semantic Scholar enrichment for {arxiv_id} (no API key).")
-        return {
-            "citationCount": 0,
-            "referenceCount": 0,
-            "citations": [],
-            "references": [],
-            "s2FieldsOfStudy": [],
-            "tldr": None
-        }
+        logger.debug(f"No SEMANTIC_SCHOLAR_API_KEY set — using rate-limited public endpoint for {arxiv_id}.")
 
     url = f"https://api.semanticscholar.org/graph/v1/paper/arXiv:{arxiv_id}"
     params = {
