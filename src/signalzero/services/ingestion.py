@@ -109,7 +109,7 @@ def enrich_with_semantic_scholar(arxiv_id: str) -> dict:
         "fields": (
             "citationCount,referenceCount,influentialCitationCount,"
             "citations,citations.isInfluential,citations.contexts,citations.fieldsOfStudy,"
-            "references,s2FieldsOfStudy,tldr"
+            "references,references.externalIds,s2FieldsOfStudy,tldr"
         )
     }
 
@@ -199,11 +199,17 @@ def update_neo4j_citation_graph(paper_data: dict, s2_data: dict):
         if references:
             logger.info(f"Adding {len(references)} CITES links in Neo4j for paper {arxiv_id}")
             for ref in references:
-                ref_arxiv_id = ref.get("externalIds", {}).get("ArXiv")
-                if ref_arxiv_id:
-                    ref_title = ref.get("title", "Unknown Ref")
-                    ref_field = ref.get("s2FieldsOfStudy", [{"category": "cs.LG"}])[0].get("category", "cs.LG") if ref.get("s2FieldsOfStudy") else "cs.LG"
+                ref_arxiv_id = ref.get("externalIds", {}).get("ArXiv") if ref.get("externalIds") else None
+                ref_s2_id = ref.get("paperId")
 
+                if not ref_arxiv_id and not ref_s2_id:
+                    continue  # Skip refs with no identifier at all
+
+                ref_title = ref.get("title", "Unknown Ref")
+                ref_field = ref.get("s2FieldsOfStudy", [{"category": "cs.LG"}])[0].get("category", "cs.LG") if ref.get("s2FieldsOfStudy") else "cs.LG"
+
+                if ref_arxiv_id:
+                    # Prefer arxiv_id as the primary key when available
                     ref_query = """
                     MERGE (ref:Paper {arxiv_id: $ref_arxiv_id})
                     ON CREATE SET ref.title = $ref_title, ref.primary_field = $ref_field
@@ -214,6 +220,21 @@ def update_neo4j_citation_graph(paper_data: dict, s2_data: dict):
                     driver.execute_query(ref_query, {
                         "arxiv_id": arxiv_id,
                         "ref_arxiv_id": ref_arxiv_id,
+                        "ref_title": ref_title,
+                        "ref_field": ref_field
+                    })
+                else:
+                    # Fall back to S2 paperId for non-arXiv references
+                    ref_query = """
+                    MERGE (ref:Paper {s2_id: $ref_s2_id})
+                    ON CREATE SET ref.title = $ref_title, ref.primary_field = $ref_field
+                    WITH ref
+                    MATCH (p:Paper {arxiv_id: $arxiv_id})
+                    MERGE (p)-[:CITES]->(ref)
+                    """
+                    driver.execute_query(ref_query, {
+                        "arxiv_id": arxiv_id,
+                        "ref_s2_id": ref_s2_id,
                         "ref_title": ref_title,
                         "ref_field": ref_field
                     })
