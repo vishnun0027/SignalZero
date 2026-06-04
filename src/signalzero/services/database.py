@@ -14,6 +14,44 @@ class Base(DeclarativeBase):
 engine = None
 SessionLocal = None
 
+def apply_migrations(engine_instance):
+    """Applies incremental schema migrations to existing databases.
+
+    SQLAlchemy's create_all() only creates NEW tables — it never alters existing
+    tables to add columns. This function ensures new columns and tables are added
+    to production databases that were created before the schema change.
+
+    Each migration is idempotent (IF NOT EXISTS / IF EXISTS checks) so it's safe
+    to run on every startup.
+    """
+    migrations = [
+        # v2.0: Cross-field inflation hardening (June 2026)
+        "ALTER TABLE papers ADD COLUMN IF NOT EXISTS influential_citation_count INTEGER DEFAULT 0",
+        """CREATE TABLE IF NOT EXISTS cross_field_baselines (
+            id SERIAL PRIMARY KEY,
+            origin_field VARCHAR(50) UNIQUE NOT NULL,
+            avg_field_spread FLOAT DEFAULT 1.0,
+            stddev_field_spread FLOAT DEFAULT 0.5,
+            paper_count INTEGER DEFAULT 0,
+            computed_at TIMESTAMP
+        )""",
+    ]
+
+    try:
+        with engine_instance.connect() as conn:
+            for migration in migrations:
+                try:
+                    conn.execute(text(migration))
+                except Exception as e:
+                    # SQLite doesn't support IF NOT EXISTS on ALTER TABLE,
+                    # but create_all() handles fresh SQLite databases.
+                    logger.debug(f"Migration skipped (likely already applied): {e}")
+            conn.commit()
+            logger.info(f"Applied {len(migrations)} schema migration checks.")
+    except Exception as e:
+        logger.error(f"Error applying migrations: {e}")
+
+
 def init_postgres():
     global engine, SessionLocal
     db_url = settings.DATABASE_URL
@@ -34,12 +72,18 @@ def init_postgres():
             else:
                 logger.info("Successfully initialized SQLite fallback database.")
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+        # Apply incremental schema migrations for existing databases
+        if not db_url.startswith("sqlite"):
+            apply_migrations(engine)
+
     except Exception as e:
         logger.error(f"Failed to connect to PostgreSQL at {db_url}: {e}")
         logger.info("Falling back to local SQLite database.")
         fallback_url = "sqlite:///signalzero_fallback.db"
         engine = create_engine(fallback_url, connect_args={"check_same_thread": False})
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db():
     if SessionLocal is None:
