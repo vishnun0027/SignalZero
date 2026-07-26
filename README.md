@@ -25,3 +25,28 @@ A weak signal is an early, faint, and ambiguous indicator of a future developmen
 ## Why This Matters
 
 SignalZero is not a productivity tool or a chat interface. It is a scientific instrument designed to find the next big thing while it is still just a handful of papers and a new idea. The most important outcome is gaining a deep understanding of how scientific knowledge propagates, how ideas cross boundaries, and how breakthroughs look in their earliest, most fragile moments — before the world even has words for them.
+
+---
+
+## 🚀 Production Deployment
+
+This project is deployed automatically to the production VM using GitHub Actions when changes are pushed to `main`.
+
+### Automated CI/CD
+The deployment workflow is configured in [.github/workflows/ci-cd.yml](file://.github/workflows/ci-cd.yml) (renamed from `ci.yml` to standardise project structures) and runs on pushes to `main`. It connects to the VM via SSH, checks out the code, and triggers the deployment script.
+
+### Unified Deployment Script
+All deployment steps are encapsulated in [scripts/deploy.sh](file://scripts/deploy.sh):
+- **Secrets Management**: If the script is run in CI, it writes the `.env` configuration file dynamically from the `DOTENV_CONTENT` environment variable.
+- **Dependencies**: Runs `uv sync --frozen` to prepare the isolated virtual environment.
+- **Systemd User Configuration**: Templates the systemd service and timer files dynamically (resolving absolute directories and removing explicit User/Group controls for systemd --user manager mode) and copies them to `~/.config/systemd/user/`.
+- **Linger Activation**: Keeps user services alive after the SSH session disconnects.
+- **Service Management**: Restarts `signalzero_api.service`, `signalzero.timer`, and `signalzero_digest.timer`.
+- **Health Check**: Runs a health loop against `http://localhost:8007/api/health` to verify success.
+
+To trigger a manual deploy on the VM, execute:
+```bash
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
+```
+

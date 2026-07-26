@@ -33,16 +33,40 @@ print("=" * 65)
 print("  SignalZero — External Data Source Connectivity Check")
 print("=" * 65)
 
+# Load .env variables manually using pure Python to avoid dependencies
+import os
+try:
+    with open(".env", encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                k, v = stripped.split("=", 1)
+                # Strip spaces and quotes
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                os.environ[k] = v
+except Exception:
+    pass
+
+s2_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
+
 for src in SOURCES:
     print(f"\n{'─' * 65}")
     print(f"  Source:    {src['name']}")
     print(f"  Used for: {src['used_for']}")
-    print(f"  Auth:     {src['auth']}")
+    if src["name"] == "Semantic Scholar API" and s2_key:
+        print(f"  Auth:     Using SEMANTIC_SCHOLAR_API_KEY (ends with ...{s2_key[-4:] if len(s2_key) > 4 else ''})")
+    else:
+        print(f"  Auth:     {src['auth']}")
     print(f"  URL:      {src['url'][:70]}...")
 
     try:
         start = time.time()
-        req = urllib.request.Request(src["url"], headers={"User-Agent": "SignalZero/1.0"})
+        headers = {"User-Agent": "SignalZero/1.0"}
+        if src["name"] == "Semantic Scholar API" and s2_key:
+            headers["x-api-key"] = s2_key
+            
+        req = urllib.request.Request(src["url"], headers=headers)
         with urllib.request.urlopen(req, timeout=10) as resp:
             elapsed = time.time() - start
             status = resp.status

@@ -30,10 +30,16 @@ try:
 except Exception as e:
     logger.error(f"Error creating database tables: {e}")
 
+# Disable Swagger UI and ReDoc in production to prevent API surface exposure
+_is_dev = settings.ENV == "development"
+
 app = FastAPI(
     title="SignalZero API",
     description="Weak Signal Intelligence for Emerging AI/ML Technologies",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url="/docs" if _is_dev else None,
+    redoc_url="/redoc" if _is_dev else None,
+    openapi_url="/openapi.json" if _is_dev else None,
 )
 
 # CORS Policy - strictly allow localhost domains for testing, no wildcard (*) origins
