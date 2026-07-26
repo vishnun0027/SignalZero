@@ -92,5 +92,7 @@ jobs:
 
             echo "✅ Deploying to APP_DIR: $APP_DIR"
             cd "$APP_DIR"
+            git reset --hard HEAD
+            git pull origin main
             chmod +x scripts/deploy.sh
             ./scripts/deploy.sh

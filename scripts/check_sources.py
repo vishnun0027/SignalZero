@@ -1,9 +1,10 @@
 """Quick connectivity check for all SignalZero external data sources (stdlib only)."""
 import json
+import os
 import time
-import urllib.request
 import urllib.error
 import urllib.parse
+import urllib.request
 
 SOURCES = [
     {
@@ -34,7 +35,6 @@ print("  SignalZero — External Data Source Connectivity Check")
 print("=" * 65)
 
 # Load .env variables manually using pure Python to avoid dependencies
-import os
 try:
     with open(".env", encoding="utf-8") as f:
         for line in f:
@@ -65,7 +65,7 @@ for src in SOURCES:
         headers = {"User-Agent": "SignalZero/1.0"}
         if src["name"] == "Semantic Scholar API" and s2_key:
             headers["x-api-key"] = s2_key
-            
+
         req = urllib.request.Request(src["url"], headers=headers)
         with urllib.request.urlopen(req, timeout=10) as resp:
             elapsed = time.time() - start
@@ -92,13 +92,13 @@ for src in SOURCES:
         elapsed = time.time() - start
         if e.code == 429:
             print(f"  Status:   ⚠️  RATE LIMITED (HTTP 429, {elapsed:.2f}s)")
-            print(f"            API is reachable but you're being throttled.")
+            print("            API is reachable but you're being throttled.")
         else:
             print(f"  Status:   ❌ HTTP ERROR {e.code} ({elapsed:.2f}s)")
     except urllib.error.URLError as e:
         print(f"  Status:   ❌ CONNECTION FAILED: {e.reason}")
     except TimeoutError:
-        print(f"  Status:   ❌ TIMEOUT (>10s)")
+        print("  Status:   ❌ TIMEOUT (>10s)")
     except Exception as e:
         print(f"  Status:   ❌ ERROR: {e}")
 
